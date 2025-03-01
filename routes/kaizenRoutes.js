@@ -6,6 +6,7 @@ const {
     deleteKaizen, 
     listKaizens 
 } = require("../controllers/KaizenController");
+// const authMiddleware  = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
