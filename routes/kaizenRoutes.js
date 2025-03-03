@@ -1,28 +1,31 @@
 const express = require("express");
+
+// Importing controller functions and middleware
 const { 
     createKaizenIdea, 
-    getKaizenById, 
-    updateKaizen, 
-    deleteKaizen, 
-    listKaizens 
+    getKaizenIdeaById, 
+    updateKaizenIdea, 
+    deleteKaizenIdea, 
+    getAllKaizenIdeas 
 } = require("../controllers/KaizenController");
-// const authMiddleware  = require("../middleware/authMiddleware");
+
+const { uploadKaizenFiles, mapFilesToFields } = require("../middleware/uploadMiddleware"); // Import the upload middleware
 
 const router = express.Router();
 
-// Create a Kaizen
-router.post("/create", createKaizenIdea);
+// Create a Kaizen with image, PDF, and PowerPoint uploads
+router.post("/create", uploadKaizenFiles, mapFilesToFields, createKaizenIdea);
 
 // List all Kaizens with pagination & filters (MUST come before `/:id`)
-router.get("/", listKaizens);  
+router.get("/", getAllKaizenIdeas);
 
 // Get a specific Kaizen by ID
-router.get("/:id", getKaizenById);
+router.get("/:id", getKaizenIdeaById);
 
 // Update a specific Kaizen
-router.put("/:id", updateKaizen);
+router.put("/:id", updateKaizenIdea);
 
 // Delete a specific Kaizen
-router.delete("/:id", deleteKaizen);
+router.delete("/:id", deleteKaizenIdea);
 
 module.exports = router;

@@ -1,144 +1,128 @@
-const KaizenIdea = require("../models/KaizenIdea"); // Ensure this file exists
+const KaizenIdea = require("../models/KaizenIdea");
+const { uploadKaizenFiles } = require("../middleware/uploadMiddleware");  // Import the middleware
 
-console.log("KaizenIdea Model:", KaizenIdea);
-console.log("KaizenIdea.findOne Type:", typeof KaizenIdea.findOne);
+// Compress image function
+const compressImage = async (fileBuffer) => {
+    const sharp = require("sharp");
+    const compressedBuffer = await sharp(fileBuffer)
+        .resize(800)  // Resize the image to 800px wide
+        .toFormat("jpeg", { quality: 70 })  // Compress the image to JPEG with 70% quality
+        .toBuffer();
+    return compressedBuffer;
+};
 
+// Controller for creating Kaizen idea
 const createKaizenIdea = async (req, res) => {
-    try {
-      const {
-        suggesterName,
-        registrationNumber,
-        categories,
-        problemStatement,
-        solutionDescription,
-        financialBenefits = {},
-        operationalBenefits = {}
-      } = req.body;
-  
-      if (!suggesterName || !registrationNumber || !problemStatement || !solutionDescription) {
-        return res.status(400).json({ success: false, message: "Missing required fields." });
-      }
-  
-      // Ensure nested objects have all required fields
-      const validatedFinancialBenefits = {
-        estimatedSavings: financialBenefits.estimatedSavings || 0,
-        actualSavings: financialBenefits.actualSavings || 0
-      };
-  
-      const validatedOperationalBenefits = {
-        efficiencyIncrease: operationalBenefits.efficiencyIncrease || 0,
-        defectReduction: operationalBenefits.defectReduction || 0,
-        leadTimeReduction: operationalBenefits.leadTimeReduction || 0
-      };
-  
-      console.log("✅ Validated Financial Benefits:", validatedFinancialBenefits);
-      console.log("✅ Validated Operational Benefits:", validatedOperationalBenefits);
-  
-      const newIdea = new KaizenIdea({
-        suggesterName,
-        registrationNumber,
-        categories,
-        problemStatement,
-        solutionDescription,
-        financialBenefits: validatedFinancialBenefits,
-        operationalBenefits: validatedOperationalBenefits
-      });
-  
-      console.log("📝 Saving new Kaizen idea:", newIdea);
-  
-      await newIdea.save();
-  
-      res.status(201).json({
-        success: true,
-        message: "Kaizen idea created successfully",
-        kaizen: newIdea
-      });
-    } catch (error) {
-      console.error("🚨 Server Error:", error);
-      res.status(500).json({ success: false, message: "Server error", error: error.message });
+  console.log("✅ Received Body:", req.body);
+console.log("✅ Received Files:", req.files);
+
+
+  try {
+    const { suggesterName, registrationNumber, categories, problemStatement, solutionDescription, financialBenefits = {}, operationalBenefits = {} } = req.body;
+
+    if (!suggesterName || !registrationNumber || !problemStatement || !solutionDescription) {
+      return res.status(400).json({ success: false, message: "Missing required fields." });
     }
-  };
-  
 
-  // Get a Kaizen idea by ID
-const getKaizenById = async (req, res) => {
-    try {
-      const { id } = req.params;
-      const kaizenIdea = await KaizenIdea.findById(id);
-  
-      if (!kaizenIdea) {
-        return res.status(404).json({ success: false, message: "Kaizen idea not found" });
-      }
-  
-      res.status(200).json({ success: true, kaizen: kaizenIdea });
-    } catch (error) {
-      res.status(500).json({ success: false, message: "Server error", error: error.message });
+    let beforeKaizenFiles = [], afterKaizenFiles = [];
+    let beforeKaizenDocs = [], afterKaizenDocs = [];
+
+    // Handle file processing if files are uploaded
+    if (req.files["beforeKaizenFiles"]) {
+      beforeKaizenFiles = await Promise.all(
+        req.files["beforeKaizenFiles"].map(async (file) => {
+          const compressedFile = await compressImage(file.buffer);  // Compress image if it's an image file
+          return compressedFile;
+        })
+      );
     }
-  };
-  
-  // ✅ Update Kaizen by ID
-const updateKaizen = async (req, res) => {
+
+    if (req.files["afterKaizenFiles"]) {
+      afterKaizenFiles = await Promise.all(
+        req.files["afterKaizenFiles"].map(async (file) => {
+          const compressedFile = await compressImage(file.buffer);
+          return compressedFile;
+        })
+      );
+    }
+
+    if (req.files["beforeKaizenDocs"]) {
+      beforeKaizenDocs = req.files["beforeKaizenDocs"].map(file => file.buffer);  // Just store the file buffer for documents
+    }
+
+    if (req.files["afterKaizenDocs"]) {
+      afterKaizenDocs = req.files["afterKaizenDocs"].map(file => file.buffer);  // Just store the file buffer for documents
+    }
+
+    const newIdea = new KaizenIdea({
+      suggesterName,
+      registrationNumber,
+      categories,
+      problemStatement,
+      solutionDescription,
+      financialBenefits,
+      operationalBenefits,
+      beforeKaizenFiles,
+      afterKaizenFiles,
+      beforeKaizenDocs,
+      afterKaizenDocs
+    });
+
+    await newIdea.save();
+
+    res.status(201).json({ success: true, message: "Kaizen idea created successfully", kaizen: newIdea });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+};
+// Controller to get all Kaizen ideas
+const getAllKaizenIdeas = async (req, res) => {
     try {
-        const { id } = req.params;
-        const updates = req.body;
-
-        const updatedKaizen = await KaizenIdea.findByIdAndUpdate(id, updates, { new: true });
-
-        if (!updatedKaizen) {
-            return res.status(404).json({ message: "Kaizen not found" });
-        }
-
-        res.json({
-            message: "Kaizen updated successfully",
-            kaizen: updatedKaizen
-        });
+        const ideas = await KaizenIdea.find();
+        res.status(200).json({ success: true, ideas });
     } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
+        res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-// ✅ DELETE Kaizen by ID
-const deleteKaizen = async (req, res) => {
+// Controller to get a single Kaizen idea by ID
+const getKaizenIdeaById = async (req, res) => {
     try {
-        const { id } = req.params;
-        const deletedKaizen = await KaizenIdea.findByIdAndDelete(id);
-
-        if (!deletedKaizen) {
-            return res.status(404).json({ message: "Kaizen not found" });
-        }
-
-        res.json({ message: "Kaizen deleted successfully" });
+        const idea = await KaizenIdea.findById(req.params.id);
+        if (!idea) return res.status(404).json({ success: false, message: "Kaizen idea not found" });
+        res.status(200).json({ success: true, idea });
     } catch (error) {
-        res.status(500).json({ message: "Server Error", error: error.message });
+        res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-
-// 📜 List Kaizens with Pagination & Filters
-const listKaizens = async (req, res) => {
+// Controller to update a Kaizen idea
+const updateKaizenIdea = async (req, res) => {
     try {
-        let { page = 1, limit = 10, category, status } = req.query;
-        page = parseInt(page);
-        limit = parseInt(limit);
-
-        const filter = {};
-        if (category) filter.categories = category; // Filter by category
-        if (status) filter.status = status; // Filter by status
-
-        const total = await KaizenIdea.countDocuments(filter);
-        const kaizens = await KaizenIdea.find(filter)
-            .skip((page - 1) * limit)
-            .limit(limit);
-
-        res.json({
-            items: kaizens,
-            total,
-            page,
-            limit,
-        });
+        const updatedIdea = await KaizenIdea.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        if (!updatedIdea) return res.status(404).json({ success: false, message: "Kaizen idea not found" });
+        res.status(200).json({ success: true, message: "Kaizen idea updated successfully", updatedIdea });
     } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
+        res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
-  module.exports = { createKaizenIdea, getKaizenById, updateKaizen , deleteKaizen, listKaizens };
 
+// Controller to delete a Kaizen idea
+const deleteKaizenIdea = async (req, res) => {
+    try {
+        const deletedIdea = await KaizenIdea.findByIdAndDelete(req.params.id);
+        if (!deletedIdea) return res.status(404).json({ success: false, message: "Kaizen idea not found" });
+        res.status(200).json({ success: true, message: "Kaizen idea deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Server error", error: error.message });
+    }
+};
+
+module.exports = {
+    createKaizenIdea,
+    getAllKaizenIdeas,
+    getKaizenIdeaById,
+    updateKaizenIdea,
+    deleteKaizenIdea,
+    uploadKaizenFiles  // No need for multer logic here
+};
