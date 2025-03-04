@@ -6,7 +6,8 @@ const {
     getKaizenIdeaById, 
     updateKaizenIdea, 
     deleteKaizenIdea, 
-    getAllKaizenIdeas 
+    getAllKaizenIdeas, 
+    getKaizenIdeaByRegistrationNumber
 } = require("../controllers/KaizenController");
 
 const router = express.Router();
@@ -22,7 +23,8 @@ router.post("/create", createKaizenIdea);
 router.get("/", getAllKaizenIdeas);
 
 // Get a specific Kaizen by ID
-router.get("/:id", getKaizenIdeaById);
+router.get("/by-registration/:registrationNumber", getKaizenIdeaByRegistrationNumber); // Fetch by registration number
+
 
 // Update a specific Kaizen
 router.put("/:id", updateKaizenIdea);

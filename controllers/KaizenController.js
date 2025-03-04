@@ -99,16 +99,19 @@ const getAllKaizenIdeas = async (req, res) => {
     }
 };
 
-// Controller to get a single Kaizen idea by ID
-const getKaizenIdeaById = async (req, res) => {
+const getKaizenIdeaByRegistrationNumber = async (req, res) => {
     try {
-        const idea = await KaizenIdea.findById(req.params.id);
-        if (!idea) return res.status(404).json({ success: false, message: "Kaizen idea not found" });
+        const idea = await KaizenIdea.findOne({ registrationNumber: new RegExp(`^${req.params.registrationNumber}$`, "i") });
+
+        if (!idea) {
+            return res.status(404).json({ success: false, message: "Kaizen idea not found" });
+        }
         res.status(200).json({ success: true, idea });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
 
 // Controller to update a Kaizen idea
 const updateKaizenIdea = async (req, res) => {
@@ -135,7 +138,7 @@ const deleteKaizenIdea = async (req, res) => {
 module.exports = {
     createKaizenIdea,
     getAllKaizenIdeas,
-    getKaizenIdeaById,
+    getKaizenIdeaByRegistrationNumber,
     updateKaizenIdea,
     deleteKaizenIdea
 };

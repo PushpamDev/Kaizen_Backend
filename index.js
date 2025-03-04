@@ -36,15 +36,17 @@ const kaizenRoutes = require("./routes/kaizenRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/fileUploadRoutes");
+const employeeRoutes = require("./routes/employeeRoutes");
 
 // Serve Static Files (Uploaded Files)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // API Routes
-app.use("/api/kaizen", kaizenRoutes);
+app.use("/api/kaizen", kaizenRoutes); // Fetch Kaizen by registration number
 app.use("/api/categories", categoryRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/employees", employeeRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
