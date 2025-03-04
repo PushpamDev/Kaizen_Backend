@@ -2,15 +2,15 @@ const mongoose = require("mongoose");
 
 const KaizenIdeaSchema = new mongoose.Schema(
   {
-    suggestorName: { type: String, required: true, trim: true },
+    suggesterName: { type: String, required: true, trim: true },
     employeeCode: { type: String, required: true, trim: true },
-    implementerName: { type: String, required: true, trim: true },
-    implementerCode: { type: String, required: true, trim: true },
+    implementerName: { type: String, trim: true, default: "" }, // ✅ Made optional
+    implementerCode: { type: String, trim: true, default: "" }, // ✅ Made optional
     date: { type: Date, default: Date.now },
-    registrationNumber: { type: String, required: true, unique: true, trim: true },
+    registrationNumber: { type: String, unique: true, trim: true, default: "" }, // ✅ Made optional
     category: { type: String, required: true, trim: true },
     otherCategory: { type: String, trim: true, default: "" },
-    problemStatement: { type: String, required: true, trim: true },
+    problemStatement: { type: String, trim: true, default: "" }, // ✅ Made optional
     description: { type: String, trim: true, default: "" },
     beforeKaizen: { type: String, trim: true, default: "" },
     afterKaizen: { type: String, trim: true, default: "" },
@@ -21,7 +21,7 @@ const KaizenIdeaSchema = new mongoose.Schema(
     horizontalDeployment: { type: String, trim: true, default: "" },
     status: {
       type: String,
-      enum: ["Pending", "Approved", "Rejected"],
+      enum: ["Pending", "Completed", "Inprogress"],
       default: "Pending",
     },
   },

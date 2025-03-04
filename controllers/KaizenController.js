@@ -6,7 +6,7 @@ const createKaizenIdea = async (req, res) => {
     
     try {
         const {
-            suggestorName,
+            suggesterName,
             employeeCode,
             implementerName,
             implementerCode,
@@ -22,12 +22,12 @@ const createKaizenIdea = async (req, res) => {
             horizontalDeployment
         } = req.body;
 
-        if (!suggestorName || !employeeCode || !category) {
+        if (!suggesterName || !employeeCode || !category) {
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
         const newKaizen = new KaizenIdea({
-            suggestorName,
+            suggesterName,
             employeeCode,
             implementerName,
             implementerCode,
@@ -51,11 +51,49 @@ const createKaizenIdea = async (req, res) => {
     }
 };
 
-// Controller to get all Kaizen ideas
+// Controller to get all Kaizen ideas with filtering, sorting, and pagination
 const getAllKaizenIdeas = async (req, res) => {
     try {
-        const ideas = await KaizenIdea.find();
-        res.status(200).json({ success: true, ideas });
+        const { status, category, sortBy, page = 1, limit = 10 } = req.query;
+
+        // Filtering options
+        const filter = {};
+        if (status) filter.status = status;
+        if (category) filter.category = category;
+
+        // Sorting & Pagination options
+        const sortOption = sortBy ? { [sortBy]: 1 } : { createdAt: -1 }; // Default: Newest first
+        const pageNumber = Number(page) || 1;
+        const pageLimit = Number(limit) || 10;
+
+        // Fetching filtered, sorted, paginated data
+        const ideas = await KaizenIdea.find(filter)
+            .select("suggesterName registrationNumber category createdAt problemStatement status")
+            .sort(sortOption)
+            .skip((pageNumber - 1) * pageLimit)
+            .limit(pageLimit)
+            .lean(); // Converts Mongoose docs to plain JavaScript objects
+
+        // Ensure missing `suggesterName` fields return as `null` instead of being absent
+        const formattedIdeas = ideas.map(idea => ({
+            suggesterName: idea.suggesterName || null,
+            registrationNumber: idea.registrationNumber || null,
+            category: idea.category || null,
+            createdAt: idea.createdAt,
+            problemStatement: idea.problemStatement || null,
+            status: idea.status || null,
+            _id: idea._id,
+        }));
+
+        // Getting total count for pagination
+        const totalIdeas = await KaizenIdea.countDocuments(filter);
+
+        res.status(200).json({
+            success: true,
+            ideas: formattedIdeas,
+            totalPages: Math.ceil(totalIdeas / pageLimit),
+            currentPage: pageNumber,
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
