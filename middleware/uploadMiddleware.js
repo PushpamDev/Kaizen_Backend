@@ -1,46 +1,52 @@
 const multer = require("multer");
+const path = require("path");
 
-// Define the allowed MIME types for files
-const allowedMimeTypes = [
-  "image/jpeg", "image/png", "image/gif", "image/webp",  // Image formats
-  "application/pdf",  // PDF files
-  "application/vnd.ms-powerpoint",  // PowerPoint files (older version)
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",  // PowerPoint files (new version)
-];
-
-// Define the storage strategy (memory storage in this case)
-const storage = multer.memoryStorage(); // Files are stored in memory before processing
-
-// Define the upload middleware
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Limit files to 5MB
-  fileFilter: (req, file, cb) => {
-    // Check if the file type is allowed
-    if (file && !allowedMimeTypes.includes(file.mimetype)) {
-      return cb(new Error("Only image, PDF, and PowerPoint files are allowed!"), false);
+// Set up storage for uploaded files
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, "uploads/"); // Save files in the 'uploads' directory
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+        cb(null, uniqueSuffix + path.extname(file.originalname)); // Unique filename
     }
-    cb(null, true);  // Accept the file
-  },
-}).fields([
-  { name: 'beforeKaizenFiles', maxCount: 5 },
-  { name: 'afterKaizenFiles', maxCount: 5 },
+});
+
+// File type validation
+const fileFilter = (req, file, cb) => {
+    const allowedTypes = ["image/jpeg", "image/png", "application/pdf"];
+    if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(new Error("Invalid file type. Only JPEG, PNG, and PDF files are allowed."), false);
+    }
+};
+
+// Multer upload middleware
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB file size limit
+});
+
+// Middleware to handle multiple file fields
+const uploadKaizenFiles = upload.fields([
+    { name: "beforeKaizenFiles", maxCount: 5 },
+    { name: "afterKaizenFiles", maxCount: 5 },
+    { name: "beforeKaizenDocs", maxCount: 5 },
+    { name: "afterKaizenDocs", maxCount: 5 }
 ]);
 
-// Custom middleware to map files to the correct fields
+// Middleware to map file paths to request body
 const mapFilesToFields = (req, res, next) => {
-    // Map files to fields if they exist
-    req.body.beforeKaizenFiles = req.files["beforeKaizenFiles"] || [];
-    req.body.afterKaizenFiles = req.files["afterKaizenFiles"] || [];
-    req.body.beforeKaizenDocs = req.files["beforeKaizenDocs"] || [];
-    req.body.afterKaizenDocs = req.files["afterKaizenDocs"] || [];
-  
+    if (req.files) {
+        ["beforeKaizenFiles", "afterKaizenFiles", "beforeKaizenDocs", "afterKaizenDocs"].forEach(field => {
+            if (req.files[field]) {
+                req.body[field] = req.files[field].map(file => file.path);
+            }
+        });
+    }
     next();
-  };
-  
-
-// Export the middleware
-module.exports = {
-  uploadKaizenFiles: upload,
-  mapFilesToFields,
 };
+
+module.exports = { uploadKaizenFiles, mapFilesToFields };

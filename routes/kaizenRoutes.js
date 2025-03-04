@@ -1,6 +1,6 @@
 const express = require("express");
 
-// Importing controller functions and middleware
+// Import controller functions
 const { 
     createKaizenIdea, 
     getKaizenIdeaById, 
@@ -9,14 +9,16 @@ const {
     getAllKaizenIdeas 
 } = require("../controllers/KaizenController");
 
-const { uploadKaizenFiles, mapFilesToFields } = require("../middleware/uploadMiddleware"); // Import the upload middleware
-
 const router = express.Router();
 
-// Create a Kaizen with image, PDF, and PowerPoint uploads
-router.post("/create", uploadKaizenFiles, mapFilesToFields, createKaizenIdea);
+// Middleware to ensure form-data text fields are properly parsed
+router.use(express.urlencoded({ extended: true })); // Parses form-data text fields
+router.use(express.json()); // Ensures JSON parsing works
 
-// List all Kaizens with pagination & filters (MUST come before `/:id`)
+// Create a Kaizen
+router.post("/create", createKaizenIdea);
+
+// List all Kaizens with pagination & filters
 router.get("/", getAllKaizenIdeas);
 
 // Get a specific Kaizen by ID
@@ -27,5 +29,11 @@ router.put("/:id", updateKaizenIdea);
 
 // Delete a specific Kaizen
 router.delete("/:id", deleteKaizenIdea);
+
+// Global error handler (Optional, but recommended)
+router.use((err, req, res, next) => {
+    console.error("🔥 Global Error Handler:", err);
+    res.status(500).json({ success: false, message: "An error occurred", error: err.message });
+});
 
 module.exports = router;

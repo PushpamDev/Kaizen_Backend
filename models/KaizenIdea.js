@@ -2,36 +2,28 @@ const mongoose = require("mongoose");
 
 const KaizenIdeaSchema = new mongoose.Schema(
   {
-    suggestorName: { type: String, required: true },
-    employeeCode: { type: String, required: true },
-    implementerName: { type: String, required: true },
-    implementerCode: { type: String, required: true },
+    suggestorName: { type: String, required: true, trim: true },
+    employeeCode: { type: String, required: true, trim: true },
+    implementerName: { type: String, required: true, trim: true },
+    implementerCode: { type: String, required: true, trim: true },
     date: { type: Date, default: Date.now },
-    registrationNumber: { type: Number, required: true, unique: true },
-    category: { type: String, required: true },
-    otherCategory: { type: String, default: "" },  // Optional
-    problemStatement: { type: String, required: true },
-    description: { type: String, default: "" },  // Optional
-    beforeKaizen: { type: String, default: "" },  // Optional
-    afterKaizen: { type: String, default: "" },  // Optional
-    beforeKaizenFiles: [
-      {
-        data: Buffer,  // Store image as binary data
-        contentType: String,  // MIME type (e.g., "image/png", "image/jpeg")
-      }
-    ],
-    afterKaizenFiles: [
-      {
-        data: Buffer,
-        contentType: String,
-      }
-    ],
-    benefits: { type: String, default: "" },  // Optional
-    implementationCost: { type: Number, default: 0 },  // Optional
-    benefitCostRatio: { type: Number, default: 0 },  // Optional
-    standardization: { type: String, default: "" },  // Optional
-    horizontalDeployment: { type: String, default: "" },  // Optional
-    status: { type: String, default: "Pending" },
+    registrationNumber: { type: String, required: true, unique: true, trim: true },
+    category: { type: String, required: true, trim: true },
+    otherCategory: { type: String, trim: true, default: "" },
+    problemStatement: { type: String, required: true, trim: true },
+    description: { type: String, trim: true, default: "" },
+    beforeKaizen: { type: String, trim: true, default: "" },
+    afterKaizen: { type: String, trim: true, default: "" },
+    benefits: { type: String, trim: true, default: "" },
+    implementationCost: { type: Number, min: 0, default: 0 },
+    benefitCostRatio: { type: Number, min: 0, default: 0 },
+    standardization: { type: String, trim: true, default: "" },
+    horizontalDeployment: { type: String, trim: true, default: "" },
+    status: {
+      type: String,
+      enum: ["Pending", "Approved", "Rejected"],
+      default: "Pending",
+    },
   },
   { timestamps: true }
 );

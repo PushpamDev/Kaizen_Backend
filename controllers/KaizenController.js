@@ -1,80 +1,56 @@
 const KaizenIdea = require("../models/KaizenIdea");
-const { uploadKaizenFiles } = require("../middleware/uploadMiddleware");  // Import the middleware
 
-// Compress image function
-const compressImage = async (fileBuffer) => {
-    const sharp = require("sharp");
-    const compressedBuffer = await sharp(fileBuffer)
-        .resize(800)  // Resize the image to 800px wide
-        .toFormat("jpeg", { quality: 70 })  // Compress the image to JPEG with 70% quality
-        .toBuffer();
-    return compressedBuffer;
-};
-
-// Controller for creating Kaizen idea
+// Controller for creating a Kaizen idea
 const createKaizenIdea = async (req, res) => {
-  console.log("✅ Received Body:", req.body);
-console.log("✅ Received Files:", req.files);
+    console.log("Received request body:", req.body);
+    
+    try {
+        const {
+            suggestorName,
+            employeeCode,
+            implementerName,
+            implementerCode,
+            registrationNumber,
+            category,
+            problemStatement,
+            beforeKaizen,
+            afterKaizen,
+            benefits,
+            implementationCost,
+            benefitCostRatio,
+            standardization,
+            horizontalDeployment
+        } = req.body;
 
+        if (!suggestorName || !employeeCode || !category) {
+            return res.status(400).json({ success: false, message: "Missing required fields." });
+        }
 
-  try {
-    const { suggesterName, registrationNumber, categories, problemStatement, solutionDescription, financialBenefits = {}, operationalBenefits = {} } = req.body;
+        const newKaizen = new KaizenIdea({
+            suggestorName,
+            employeeCode,
+            implementerName,
+            implementerCode,
+            registrationNumber,
+            category,
+            problemStatement,
+            beforeKaizen,
+            afterKaizen,
+            benefits,
+            implementationCost,
+            benefitCostRatio,
+            standardization,
+            horizontalDeployment,
+        });
 
-    if (!suggesterName || !registrationNumber || !problemStatement || !solutionDescription) {
-      return res.status(400).json({ success: false, message: "Missing required fields." });
+        await newKaizen.save();
+        res.status(201).json({ success: true, message: "Kaizen idea created successfully.", kaizen: newKaizen });
+    } catch (error) {
+        console.error("Error creating Kaizen idea:", error);
+        res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
-
-    let beforeKaizenFiles = [], afterKaizenFiles = [];
-    let beforeKaizenDocs = [], afterKaizenDocs = [];
-
-    // Handle file processing if files are uploaded
-    if (req.files["beforeKaizenFiles"]) {
-      beforeKaizenFiles = await Promise.all(
-        req.files["beforeKaizenFiles"].map(async (file) => {
-          const compressedFile = await compressImage(file.buffer);  // Compress image if it's an image file
-          return compressedFile;
-        })
-      );
-    }
-
-    if (req.files["afterKaizenFiles"]) {
-      afterKaizenFiles = await Promise.all(
-        req.files["afterKaizenFiles"].map(async (file) => {
-          const compressedFile = await compressImage(file.buffer);
-          return compressedFile;
-        })
-      );
-    }
-
-    if (req.files["beforeKaizenDocs"]) {
-      beforeKaizenDocs = req.files["beforeKaizenDocs"].map(file => file.buffer);  // Just store the file buffer for documents
-    }
-
-    if (req.files["afterKaizenDocs"]) {
-      afterKaizenDocs = req.files["afterKaizenDocs"].map(file => file.buffer);  // Just store the file buffer for documents
-    }
-
-    const newIdea = new KaizenIdea({
-      suggesterName,
-      registrationNumber,
-      categories,
-      problemStatement,
-      solutionDescription,
-      financialBenefits,
-      operationalBenefits,
-      beforeKaizenFiles,
-      afterKaizenFiles,
-      beforeKaizenDocs,
-      afterKaizenDocs
-    });
-
-    await newIdea.save();
-
-    res.status(201).json({ success: true, message: "Kaizen idea created successfully", kaizen: newIdea });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Server error", error: error.message });
-  }
 };
+
 // Controller to get all Kaizen ideas
 const getAllKaizenIdeas = async (req, res) => {
     try {
@@ -123,6 +99,5 @@ module.exports = {
     getAllKaizenIdeas,
     getKaizenIdeaById,
     updateKaizenIdea,
-    deleteKaizenIdea,
-    uploadKaizenFiles  // No need for multer logic here
+    deleteKaizenIdea
 };
