@@ -8,9 +8,12 @@ const createKaizenIdea = async (req, res) => {
         const {
             suggesterName,
             employeeCode,
+            plantCode,
             implementerName,
             implementerCode,
+            implementationDate,
             registrationNumber,
+            description,
             category,
             problemStatement,
             beforeKaizen,
@@ -29,9 +32,12 @@ const createKaizenIdea = async (req, res) => {
         const newKaizen = new KaizenIdea({
             suggesterName,
             employeeCode,
+            plantCode,
             implementerName,
             implementerCode,
+            implementationDate,
             registrationNumber,
+            description,
             category,
             problemStatement,
             beforeKaizen,
@@ -66,22 +72,39 @@ const getAllKaizenIdeas = async (req, res) => {
         const pageNumber = Number(page) || 1;
         const pageLimit = Number(limit) || 10;
 
-        // Fetching filtered, sorted, paginated data
+        // Fetching filtered, sorted, paginated data with all required fields
         const ideas = await KaizenIdea.find(filter)
-            .select("suggesterName registrationNumber category createdAt problemStatement status")
+            .select(
+                "suggesterName employeeCode plantCode implementerName implementerCode implementationDate date registrationNumber category otherCategory problemStatement description beforeKaizen afterKaizen benefits implementationCost benefitCostRatio standardization horizontalDeployment status createdAt"
+            )
             .sort(sortOption)
-            .skip((pageNumber - 1) * pageLimit)
+            .skip((pageNumber - 1) * pageLimit) 
             .limit(pageLimit)
             .lean(); // Converts Mongoose docs to plain JavaScript objects
 
-        // Ensure missing `suggesterName` fields return as `null` instead of being absent
+        // Ensuring missing fields return as `null` instead of being absent
         const formattedIdeas = ideas.map(idea => ({
             suggesterName: idea.suggesterName || null,
+            employeeCode: idea.employeeCode || null,
+            plantCode: idea.plantCode || null,
+            implementerName: idea.implementerName || null,
+            implementerCode: idea.implementerCode || null,
+            implementationDate : idea.implementationDate || null,
+            date: idea.date || null,
             registrationNumber: idea.registrationNumber || null,
             category: idea.category || null,
-            createdAt: idea.createdAt,
+            otherCategory: idea.otherCategory || null,
             problemStatement: idea.problemStatement || null,
-            status: idea.status || null,
+            description: idea.description || null,
+            beforeKaizen: idea.beforeKaizen || null,
+            afterKaizen: idea.afterKaizen || null,
+            benefits: idea.benefits || null,
+            implementationCost: idea.implementationCost || 0,
+            benefitCostRatio: idea.benefitCostRatio || 0,
+            standardization: idea.standardization || null,
+            horizontalDeployment: idea.horizontalDeployment || null,
+            status: idea.status || "Pending",
+            createdAt: idea.createdAt || null,
             _id: idea._id,
         }));
 
@@ -99,18 +122,35 @@ const getAllKaizenIdeas = async (req, res) => {
     }
 };
 
+
 const getKaizenIdeaByRegistrationNumber = async (req, res) => {
     try {
-        const idea = await KaizenIdea.findOne({ registrationNumber: new RegExp(`^${req.params.registrationNumber}$`, "i") });
+        console.log("Received Query Params:", req.query); // Debugging
+
+        const { registrationNumber } = req.query;
+
+        if (!registrationNumber) {
+            return res.status(400).json({ success: false, message: "Registration number is required" });
+        }
+
+        console.log("Searching for registration number:", registrationNumber); // Debugging
+
+        const idea = await KaizenIdea.findOne({ registrationNumber: registrationNumber });
 
         if (!idea) {
+            console.log("No Kaizen found for:", registrationNumber); // Debugging
             return res.status(404).json({ success: false, message: "Kaizen idea not found" });
         }
+
+        console.log("Kaizen Found:", idea); // Debugging
         res.status(200).json({ success: true, idea });
     } catch (error) {
+        console.error("🔥 Server Error:", error.message);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
+
 
 
 // Controller to update a Kaizen idea

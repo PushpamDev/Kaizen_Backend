@@ -23,7 +23,7 @@ router.post("/create", createKaizenIdea);
 router.get("/", getAllKaizenIdeas);
 
 // Get a specific Kaizen by ID
-router.get("/by-registration/:registrationNumber", getKaizenIdeaByRegistrationNumber); // Fetch by registration number
+router.get("/by-registration", getKaizenIdeaByRegistrationNumber); // Fetch by registration number
 
 
 // Update a specific Kaizen

@@ -4,8 +4,10 @@ const KaizenIdeaSchema = new mongoose.Schema(
   {
     suggesterName: { type: String, required: true, trim: true },
     employeeCode: { type: String, required: true, trim: true },
+    plantCode: { type: String, required: true, trim: true },
     implementerName: { type: String, trim: true, default: "" }, // ✅ Made optional
     implementerCode: { type: String, trim: true, default: "" }, // ✅ Made optional
+    implementationDate: { type: String, trim: true, default: "" },
     date: { type: Date, default: Date.now },
     registrationNumber: { type: String, unique: true, trim: true, default: "" }, // ✅ Made optional
     category: { type: String, required: true, trim: true },

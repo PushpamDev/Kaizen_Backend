@@ -1,15 +1,15 @@
 const axios = require("axios");
 
-const searchEmployeeByName = async (req, res) => {
+const searchEmployeeByNameOrCode = async (req, res) => {
     console.log("🔄 Route hit: /search-employee");
     console.log("Query params received:", req.query);
 
     try {
-        const { suggesterName } = req.query;
+        const { query } = req.query; // Accepting either name or employee code
 
-        if (!suggesterName) {
-            console.log("❌ No suggesterName provided");
-            return res.status(400).json({ success: false, message: "Suggester name is required for search." });
+        if (!query) {
+            console.log("❌ No query provided");
+            return res.status(400).json({ success: false, message: "Employee name or code is required for search." });
         }
 
         // ThirdEye API URL
@@ -19,33 +19,40 @@ const searchEmployeeByName = async (req, res) => {
         // Make API request
         const response = await axios.get(apiUrl);
 
-        console.log("✅ ThirdEye API Response Data:", response.data);
+        console.log("✅ ThirdEye API Response Data received.");
 
-        // Ensure employeeInfo exists and is an array
+        // Ensure API response is valid
         if (!response.data || !Array.isArray(response.data.employeeInfo)) {
             console.error("❌ API response format is incorrect:", response.data);
             return res.status(500).json({ success: false, message: "Invalid API response format", data: response.data });
         }
 
+        const employeeInfo = response.data.employeeInfo;
+
         // Process Employees
-        const employees = response.data.employeeInfo.map(emp => {
+        const employees = employeeInfo.map(emp => {
+            if (!emp.empId) return null; // Skip invalid entries
+
             let extractedName = emp.empId.includes("Contractual@") 
                 ? emp.empId.replace("Contractual@", "").split("_")[0] 
                 : emp.empId.split("_")[0];
 
-            let extractedId = emp.empId.split("_")[1];
+            let extractedId = emp.empId.split("_")[1] || "Unknown";
 
             return {
-                name: extractedName,
-                employeeCode: extractedId,
+                name: extractedName.toLowerCase(),  // Convert to lowercase for case-insensitive search
+                employeeCode: extractedId.toLowerCase(),
                 designation: emp.designation || "Unknown", 
                 department: emp.department || "Unknown"
             };
-        });
+        }).filter(emp => emp !== null); // Remove null entries
 
-        // Filter employees based on name
+        // Convert query to lowercase for case-insensitive search
+        const lowerCaseQuery = query.toLowerCase();
+
+        // Filter employees based on either name or employee code
         const matchingEmployees = employees.filter(emp =>
-            emp.name.toLowerCase().includes(suggesterName.toLowerCase())
+            emp.name.includes(lowerCaseQuery) || emp.employeeCode.includes(lowerCaseQuery)
         );
 
         console.log("🔍 Filtered employees:", matchingEmployees);
@@ -57,4 +64,4 @@ const searchEmployeeByName = async (req, res) => {
     }
 };
 
-module.exports = { searchEmployeeByName };
+module.exports = { searchEmployeeByNameOrCode };
