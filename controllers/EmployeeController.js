@@ -1,20 +1,130 @@
 const axios = require("axios");
 
+// Configuration for different plant API URLs and group names
+const plantConfigs = {
+    "1022": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "J-2 GGM"
+    },
+    "2014": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "N-5 GGM"
+    },
+    "1051": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "J-5 GGM"
+    },
+    "1031": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "J-3 MSR"
+    },
+    "2011": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "N-1 GGM"
+    },
+    "1513": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "JBMA FBD"
+    },
+    "2511": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "JBMI"
+    },
+    "8021": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "NMPL NGH-1"
+    },
+    "2111": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "N-11 BLR"
+    },
+    "2211": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "NMPL HUB"
+    },
+    "2201": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "NMPL HSR"
+    },
+    "2221": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "NMPL PNG"
+    },
+    "2191": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "NMPL CHK"
+    },
+    "1571": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "JBMA IND-1"
+    },
+    "2041": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "N-8 HDW"
+    },
+    "1561": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "JBMA SND TML"
+    },
+    "2081": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "N-10 PNG"
+    },
+    "1681": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "JBMA CHK"
+    },
+    "1551": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "JBMA NSK"
+    },
+    "7011": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "NIPL"
+    },
+    "2161": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "NMPL GGM"
+    },
+    "2132": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "N-14 VTP"
+    },
+    "2181": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "NMPL Waluj"
+    },
+    "1712": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "JBMA ORG-SSC"
+    },
+    "9211": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "ThirdEye AI"
+    },
+    "1054": {
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo",
+        "frGroupName": "NMPL SSC CHK"
+    }
+};
+
 const searchEmployeeByNameOrCode = async (req, res) => {
     console.log("🔄 Route hit: /search-employee");
     console.log("Query params received:", req.query);
 
     try {
-        const { query } = req.query; // Accepting either name or employee code
+        const { query, plantCode } = req.query; // Accept name OR employee code
 
         if (!query) {
             console.log("❌ No query provided");
             return res.status(400).json({ success: false, message: "Employee name or code is required for search." });
         }
 
-        // ThirdEye API URL
-        const apiUrl = "http://fr.thirdeye-ai.com/face/getEmpInfo?onlyId=1&frGroupName=ThirdEye%20AI&companyId=JBMGroup&frGroup=frAttendance";
-        console.log("🔄 Sending request to ThirdEye API:", apiUrl);
+        // Get plant-specific API details, defaulting to "ThirdEye AI" if plantCode is missing or invalid
+        const plantConfig = plantConfigs[plantCode] || plantConfigs["9211"];
+        const apiUrl = `${plantConfig.apiUrl}?onlyId=1&frGroupName=${encodeURIComponent(plantConfig.frGroupName)}&companyId=JBMGroup&frGroup=frAttendance`;
+
+        console.log(`🔄 Sending request to ThirdEye API (${plantConfig.frGroupName}):`, apiUrl);
 
         // Make API request
         const response = await axios.get(apiUrl);
@@ -50,10 +160,16 @@ const searchEmployeeByNameOrCode = async (req, res) => {
         // Convert query to lowercase for case-insensitive search
         const lowerCaseQuery = query.toLowerCase();
 
-        // Filter employees based on either name or employee code
+        // Search employees by either name or employee code
         const matchingEmployees = employees.filter(emp =>
             emp.name.includes(lowerCaseQuery) || emp.employeeCode.includes(lowerCaseQuery)
         );
+
+        // If no match found, return message
+        if (matchingEmployees.length === 0) {
+            console.log("❌ No employees found for query:", query);
+            return res.status(404).json({ success: false, message: "No employee found with the given details." });
+        }
 
         console.log("🔍 Filtered employees:", matchingEmployees);
 
