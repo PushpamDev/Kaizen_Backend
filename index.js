@@ -38,6 +38,8 @@ const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/fileUploadRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const employeeVerificationRoutes = require("./routes/employeeVerificationRoutes");
+const approvalWorkflowRoutes = require("./routes/approvalWorkflowRoutes");
+
 // Serve Static Files (Uploaded Files)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -48,7 +50,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/status", employeeVerificationRoutes);
-
+app.use("/api/approval-workflow", approvalWorkflowRoutes);
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error("🔥 Server Error:", err.message);
