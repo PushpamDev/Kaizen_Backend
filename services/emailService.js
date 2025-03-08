@@ -38,5 +38,26 @@ const sendKaizenSubmissionEmail = async (email, kaizenData) => {
         console.error("❌ Error sending email:", error);
     }
 };
+const sendApprovalEmail = async (approverEmail, kaizenData) => {
+    try {
+        console.log(`📨 Sending approval email to: ${approverEmail}`);
 
-module.exports = sendKaizenSubmissionEmail;
+        const mailOptions = {
+            from: process.env.SMTP_USER,
+            to: approverEmail,
+            subject: `Approval Required: Kaizen Idea ${kaizenData.registrationNumber}`,
+            text: `Dear Approver,\n\nA new Kaizen idea requires your approval.\n\n` +
+                `Idea ID: ${kaizenData.registrationNumber}\n` +
+                `Submitted By: ${kaizenData.suggesterName}\n` +
+                `Description: ${kaizenData.description}\n\n` +
+                `Please review the idea and take necessary action.\n\nThank you.`,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ Approval email sent to ${approverEmail}: ${info.response}`);
+    } catch (error) {
+        console.error("❌ Error sending approval email:", error);
+    }
+};
+
+module.exports = {sendKaizenSubmissionEmail , sendApprovalEmail};

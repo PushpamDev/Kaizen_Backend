@@ -1,7 +1,7 @@
 const KaizenIdea = require("../models/KaizenIdea");
 
 // Controller for creating a Kaizen idea
-const sendKaizenSubmissionEmail = require("../services/emailService"); // Import email service
+const {sendKaizenSubmissionEmail} = require("../services/emailService"); // Import email service
 const createKaizenIdea = async (req, res) => {
     console.log("Received request body:", req.body);
     
@@ -10,7 +10,7 @@ const createKaizenIdea = async (req, res) => {
             suggesterName,
             employeeCode,
             plantCode,
-            email,  // ✅ Added email field
+            email,
             implementerName,
             implementerCode,
             implementationDate,
@@ -27,7 +27,7 @@ const createKaizenIdea = async (req, res) => {
             horizontalDeployment
         } = req.body;
 
-        if (!suggesterName || !employeeCode || !category || !email) {  // ✅ Email is required
+        if (!suggesterName || !employeeCode || !category || !email) {
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
@@ -35,7 +35,7 @@ const createKaizenIdea = async (req, res) => {
             suggesterName,
             employeeCode,
             plantCode,
-            email, // ✅ Save email in database
+            email,
             implementerName,
             implementerCode,
             implementationDate,
@@ -50,6 +50,21 @@ const createKaizenIdea = async (req, res) => {
             benefitCostRatio,
             standardization,
             horizontalDeployment,
+
+            // ✅ Explicitly Set Defaults to Avoid Auto-Approval Issues
+            isApproved: false,    
+            status: "Pending",    
+            currentStage: 0,      
+
+            // ✅ Ensure Stages Start with "Pending" Status
+            stages: [
+                {
+                    label: "Initial Review",
+                    description: "Reviewed by the quality control team",
+                    status: "pending", 
+                    timestamp: null,  
+                }
+            ]
         });
 
         await newKaizen.save();
@@ -63,6 +78,7 @@ const createKaizenIdea = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
 
 // Controller to get all Kaizen ideas with filtering, sorting, and pagination
 const getAllKaizenIdeas = async (req, res) => {

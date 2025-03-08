@@ -6,13 +6,15 @@ const stepSchema = new mongoose.Schema({
     description: String,
     isApproved: Boolean,
     isRejected: Boolean,
-    editing: Boolean,
+    status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" }, // General step status
     approverRole: String, 
+    order: { type: Number, required: true }, // Add order for sequencing
     nextSteps: [{ type: Number }], 
     subSteps: [{ 
         id: Number,
         title: String,
         isApproved: Boolean,
+        status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" }, // Add status for sub-steps
         approverRole: String, 
         nextSteps: [{ type: Number }]
     }]
@@ -50,19 +52,19 @@ const plantData = {
 
 const approvalWorkflowSchema = new mongoose.Schema({
     plantCode: { type: String, required: true, unique: true },
-    plantName: { type: String, default: "" },  // Automatically populate
+    plantName: { type: String, default: "" }, 
     steps: [stepSchema],
     splitStep: {
         exists: { type: Boolean, default: false },
         approvalPath: [{ 
-            id: Number,
+            id: { type: Number, required: true }, // ✅ Ensure 'id' is always provided
             title: String,
             description: String,
             isApproved: Boolean,
             isRejected: Boolean
         }],
         rejectionPath: [{ 
-            id: Number,
+            id: { type: Number, required: true }, // ✅ Ensure 'id' is always provided
             title: String,
             description: String,
             isApproved: Boolean,
@@ -76,6 +78,7 @@ const approvalWorkflowSchema = new mongoose.Schema({
         }
     ]
 });
+
 
 // Middleware to auto-populate plantName before saving
 approvalWorkflowSchema.pre("save", function (next) {

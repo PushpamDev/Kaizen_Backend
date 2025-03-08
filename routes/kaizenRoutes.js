@@ -30,10 +30,10 @@ router.get("/by-registration", getKaizenIdeaByRegistrationNumber); // Fetch by r
 router.put("/:id", updateKaizenIdea);
 
 // Get Kaizen status Bar
-router.get("/status/:registrationNumber", getKaizenStatusByRegNumber);
+// router.get("/status/:registrationNumber", getKaizenStatusByRegNumber);
 
 // Update Kaizen Status by Registration Number
-router.put("/status/update/:registrationNumber", updateKaizenStatus);
+// router.put("/status/update/:registrationNumber", updateKaizenStatus);
 
 // Delete a specific Kaizen
 router.delete("/:id", deleteKaizenIdea);

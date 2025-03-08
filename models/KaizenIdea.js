@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const StageSchema = new mongoose.Schema({
   label: { type: String, required: true },
   description: { type: String, required: true },
-  timestamp: { type: Date, required: true },
+  timestamp: { type: Date, default: null },  // ✅ Timestamp is now optional
   status: { type: String, enum: ["completed", "active", "error", "pending"], required: true }
 });
 
@@ -12,7 +12,7 @@ const KaizenIdeaSchema = new mongoose.Schema(
     suggesterName: { type: String, required: true, trim: true },
     employeeCode: { type: String, required: true, trim: true },
     plantCode: { type: String, required: true, trim: true },
-    email: { type: String, required: true, trim: true }, // 📌 Added Email Field
+    email: { type: String, required: true, trim: true },
     implementerName: { type: String, trim: true, default: "" },
     implementerCode: { type: String, trim: true, default: "" },
     implementationDate: { type: String, trim: true, default: "" },
@@ -33,14 +33,17 @@ const KaizenIdeaSchema = new mongoose.Schema(
     // 🔹 Status & Workflow Fields
     currentStage: { type: Number, default: 0 },
     isApproved: { type: Boolean, default: false },
-    stages: [
-      {
-        label: String,
-        description: String,
-        timestamp: String,
-        status: { type: String, enum: ["completed", "active", "pending", "error"] },
-      },
-    ],
+    stages: {
+      type: [StageSchema], // ✅ Reference `StageSchema`
+      default: [
+        {
+          label: "Initial Review",
+          description: "Reviewed by the quality control team",
+          status: "pending",  // ✅ Ensure first stage is always "pending"
+          timestamp: null,     // ✅ No timestamp initially
+        },
+      ],
+    },
 
     status: {
       type: String,

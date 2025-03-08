@@ -5,7 +5,8 @@ const {
     addStep,
     editStep,
     deleteStep,
-    addSplitStep,  // ✅ Added missing comma
+    addSplitStep,
+    approveKaizenIdea,  // ✅ Added missing comma
     addSubPathStep // ✅ Removed extra comma
 } = require("../controllers/approvalWorkflowController");
 
@@ -31,5 +32,9 @@ router.post("/:plantCode/split-steps/:id/sub-steps", addSubPathStep);
 
 // Delete a step from a specific plant's workflow
 router.delete("/:plantCode/steps/:id", deleteStep);
+
+//Approve a step
+router.post("/approve", approveKaizenIdea);
+
 
 module.exports = router;
