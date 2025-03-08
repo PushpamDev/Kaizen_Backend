@@ -1,6 +1,7 @@
 const KaizenIdea = require("../models/KaizenIdea");
 
 // Controller for creating a Kaizen idea
+const sendKaizenSubmissionEmail = require("../services/emailService"); // Import email service
 const createKaizenIdea = async (req, res) => {
     console.log("Received request body:", req.body);
     
@@ -9,6 +10,7 @@ const createKaizenIdea = async (req, res) => {
             suggesterName,
             employeeCode,
             plantCode,
+            email,  // ✅ Added email field
             implementerName,
             implementerCode,
             implementationDate,
@@ -25,7 +27,7 @@ const createKaizenIdea = async (req, res) => {
             horizontalDeployment
         } = req.body;
 
-        if (!suggesterName || !employeeCode || !category) {
+        if (!suggesterName || !employeeCode || !category || !email) {  // ✅ Email is required
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
@@ -33,6 +35,7 @@ const createKaizenIdea = async (req, res) => {
             suggesterName,
             employeeCode,
             plantCode,
+            email, // ✅ Save email in database
             implementerName,
             implementerCode,
             implementationDate,
@@ -50,6 +53,10 @@ const createKaizenIdea = async (req, res) => {
         });
 
         await newKaizen.save();
+
+        // ✅ Send Email (after saving to DB)
+        await sendKaizenSubmissionEmail(email, newKaizen);
+
         res.status(201).json({ success: true, message: "Kaizen idea created successfully.", kaizen: newKaizen });
     } catch (error) {
         console.error("Error creating Kaizen idea:", error);

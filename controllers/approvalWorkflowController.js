@@ -1,90 +1,129 @@
 const ApprovalWorkflow = require("../models/ApprovalWorkflow");
 
-const plantData = {
-    "1022": { frGroupName: "J-2 GGM" },
-    "2014": { frGroupName: "N-5 GGM" },
-    "1051": { frGroupName: "J-5 GGM" },
-    "1031": { frGroupName: "J-3 MSR" },
-    "2011": { frGroupName: "N-1 GGM" },
-    "1513": { frGroupName: "JBMA FBD" },
-    "2511": { frGroupName: "JBMI" },
-    "8021": { frGroupName: "NMPL NGH-1" },
-    "2111": { frGroupName: "N-11 BLR" },
-    "2211": { frGroupName: "NMPL HUB" },
-    "2201": { frGroupName: "NMPL HSR" },
-    "2221": { frGroupName: "NMPL PNG" },
-    "2191": { frGroupName: "NMPL CHK" },
-    "1571": { frGroupName: "JBMA IND-1" },
-    "2041": { frGroupName: "N-8 HDW" },
-    "1561": { frGroupName: "JBMA SND TML" },
-    "2081": { frGroupName: "N-10 PNG" },
-    "1681": { frGroupName: "JBMA CHK" },
-    "1551": { frGroupName: "JBMA NSK" },
-    "7011": { frGroupName: "NIPL" },
-    "2161": { frGroupName: "NMPL GGM" },
-    "2132": { frGroupName: "N-14 VTP" },
-    "2181": { frGroupName: "NMPL Waluj" },
-    "1712": { frGroupName: "JBMA ORG-SSC" },
-    "9211": { frGroupName: "ThirdEye AI" },
-    "1054": { frGroupName: "NMPL SSC CHK" }
-};
+const defaultWorkflow = (plantCode) => ({
+    plantCode,
+    steps: [
+        {
+            id: 1,
+            title: "Step 1: Initial Review",
+            description: "Review the submitted Kaizen idea.",
+            isApproved: false,
+            isRejected: false,
+            editing: false,
+            approverRole: "Supervisor",
+            nextSteps: [2],
+            subSteps: []
+        },
+        {
+            id: 2,
+            title: "Step 2: Manager Approval",
+            description: "Manager reviews and approves the idea.",
+            isApproved: false,
+            isRejected: false,
+            editing: false,
+            approverRole: "Manager",
+            nextSteps: [3],
+            subSteps: []
+        },
+        {
+            id: 3,
+            title: "Step 3: Final Approval",
+            description: "Final approval from the Plant Head.",
+            isApproved: false,
+            isRejected: false,
+            editing: false,
+            approverRole: "Plant Head",
+            nextSteps: [],
+            subSteps: []
+        }
+    ],
+    splitStep: {
+        exists: true,
+        approvalPath: [],
+        rejectionPath: []
+    },
+    approvalHierarchy: [
+        { role: "Supervisor", order: 1 },
+        { role: "Manager", order: 2 },
+        { role: "Plant Head", order: 3 }
+    ],
+    revisionHistory: []
+});
 
-// 📌 Get the workflow for a specific plant
+// 📌 Get Workflow for a Specific Plant
 const getApprovalWorkflow = async (req, res) => {
     try {
         const { plantCode } = req.params;
-        const workflow = await ApprovalWorkflow.findOne({ plantCode });
+        let workflow = await ApprovalWorkflow.findOne({ plantCode });
 
         if (!workflow) {
-            return res.status(404).json({ success: false, message: "No workflow found for this plant." });
+            return res.status(200).json({
+                success: true,
+                message: "No custom workflow found, returning default.",
+                workflow: defaultWorkflow(plantCode),
+            });
         }
 
-        // Fetch plantName from the mapping
-        const plantName = plantData[plantCode]?.frGroupName || "Unknown Plant";
-
-        res.status(200).json({
-            success: true,
-            plantCode: workflow.plantCode,
-            plantName,  // ✅ Now included in the response
-            steps: workflow.steps,
-            splitStep: workflow.splitStep,
-            approvalHierarchy: workflow.approvalHierarchy
-        });
+        res.status(200).json({ success: true, workflow });
     } catch (error) {
         console.error("❌ Error fetching workflow:", error);
         res.status(500).json({ success: false, message: "Server error" });
     }
 };
 
-// 📌 Set Workflow Structure (Admin Control) - Steps & Hierarchy
+// 📌 Set Workflow Structure (Stores Last 5 Versions)
 const setWorkflowStructure = async (req, res) => {
     try {
         const { plantCode } = req.params;
         const { steps, approvalHierarchy } = req.body;
 
-        if (!steps || !Array.isArray(steps)) {
-            return res.status(400).json({ success: false, message: "Invalid steps format" });
-        }
-
-        if (!approvalHierarchy || !Array.isArray(approvalHierarchy)) {
-            return res.status(400).json({ success: false, message: "Invalid approval hierarchy format" });
+        if (!Array.isArray(steps) || !Array.isArray(approvalHierarchy)) {
+            return res.status(400).json({ success: false, message: "Invalid format for steps or hierarchy" });
         }
 
         let workflow = await ApprovalWorkflow.findOne({ plantCode });
 
         if (!workflow) {
-            workflow = new ApprovalWorkflow({ plantCode, steps, approvalHierarchy });
+            workflow = new ApprovalWorkflow({ ...defaultWorkflow(plantCode), steps, approvalHierarchy });
         } else {
+            if (workflow.revisionHistory.length >= 5) workflow.revisionHistory.shift();
+            workflow.revisionHistory.push({ steps: workflow.steps, approvalHierarchy: workflow.approvalHierarchy });
+
             workflow.steps = steps;
             workflow.approvalHierarchy = approvalHierarchy;
         }
 
         await workflow.save();
-
-        res.status(200).json({ success: true, message: "Workflow structure updated successfully", workflow });
+        res.status(200).json({ success: true, message: "Workflow updated", workflow });
     } catch (error) {
-        console.error("❌ Error updating workflow structure:", error);
+        console.error("❌ Error updating workflow:", error);
         res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+
+const sendEmail = require("../services/emailService");
+const notifyFirstApprover = async (plantCode, ideaDetails) => {
+    try {
+        const workflow = await ApprovalWorkflow.findOne({ plantCode });
+        if (!workflow || workflow.steps.length === 0) return;
+
+        const firstApproverRole = workflow.steps[0].approverRole;
+        const firstApprover = await getUserByRoleAndPlant(firstApproverRole, plantCode); // Implement this function
+
+        if (!firstApprover || !firstApprover.email) return;
+
+        const subject = "New Kaizen Idea Submission - Approval Required";
+        const text = `Dear ${firstApprover.name},\n\nA new Kaizen idea has been submitted for approval.\n\nIdea Title: ${ideaDetails.title}\nSubmitted By: ${ideaDetails.submitterName}\n\nPlease review and take action.\n\nThank you.`;
+        const html = `<p>Dear ${firstApprover.name},</p>
+                      <p>A new Kaizen idea has been submitted for approval.</p>
+                      <p><strong>Idea Title:</strong> ${ideaDetails.title}</p>
+                      <p><strong>Submitted By:</strong> ${ideaDetails.submitterName}</p>
+                      <p>Please review and take action.</p>
+                      <p>Thank you.</p>`;
+
+        await sendEmail(firstApprover.email, subject, text, html);
+    } catch (error) {
+        console.error("❌ Error notifying first approver:", error);
     }
 };
 
@@ -95,9 +134,7 @@ const addStep = async (req, res) => {
         const { index, title, description } = req.body;
 
         let workflow = await ApprovalWorkflow.findOne({ plantCode });
-        if (!workflow) {
-            return res.status(404).json({ success: false, message: "Workflow not found" });
-        }
+        if (!workflow) return res.status(404).json({ success: false, message: "Workflow not found" });
 
         const newStep = {
             id: workflow.steps.length + 1,
@@ -111,67 +148,47 @@ const addStep = async (req, res) => {
         workflow.steps.splice(index, 0, newStep);
         await workflow.save();
 
-        res.status(201).json({ success: true, message: "Step added successfully", steps: workflow.steps });
+        res.status(201).json({ success: true, message: "Step added", steps: workflow.steps });
     } catch (error) {
         console.error("❌ Error adding step:", error);
         res.status(500).json({ success: false, message: "Server error" });
     }
 };
 
-// 📌 Add a Split Step (Approval/Rejection Decision)
+// 📌 Add a Split Step
 const addSplitStep = async (req, res) => {
     try {
         const { plantCode } = req.params;
 
         let workflow = await ApprovalWorkflow.findOne({ plantCode });
-        if (!workflow) {
-            return res.status(404).json({ success: false, message: "Workflow not found" });
-        }
+        if (!workflow) return res.status(404).json({ success: false, message: "Workflow not found" });
 
-        // Check if a split step already exists
         if (workflow.splitStep.exists) {
-            return res.status(400).json({ success: false, message: "A split step already exists for this workflow." });
+            return res.status(400).json({ success: false, message: "Split step already exists" });
         }
 
-        workflow.splitStep = {
-            exists: true,
-            approvalPath: [],
-            rejectionPath: []
-        };
-
+        workflow.splitStep = { exists: true, approvalPath: [], rejectionPath: [] };
         await workflow.save();
 
-        res.status(201).json({ success: true, message: "Split step added successfully", workflow });
+        res.status(201).json({ success: true, message: "Split step added", workflow });
     } catch (error) {
         console.error("❌ Error adding split step:", error);
         res.status(500).json({ success: false, message: "Server error" });
     }
 };
 
-// 📌 Add a Sub-Path Step (Approval Hierarchy)
+// 📌 Add a Sub-Path Step (Approval/Rejection)
 const addSubPathStep = async (req, res) => {
     try {
         const { plantCode } = req.params;
         const { type, title, description } = req.body;
 
-        console.log("🔹 Incoming Request for Sub-Path Step:");
-        console.log("Plant Code:", plantCode);
-        console.log("Type:", type);
-        console.log("Title:", title);
-        console.log("Description:", description);
-
         let workflow = await ApprovalWorkflow.findOne({ plantCode });
-        if (!workflow) {
-            console.log("❌ Workflow not found for plantCode:", plantCode);
-            return res.status(404).json({ success: false, message: "Workflow not found" });
-        }
+        if (!workflow) return res.status(404).json({ success: false, message: "Workflow not found" });
 
-        if (!workflow.splitStep || !workflow.splitStep.exists) {
-            console.log("❌ Split step not found in workflow:", workflow);
-            return res.status(400).json({ success: false, message: "Split step not found. Add a split step first." });
+        if (!workflow.splitStep.exists) {
+            return res.status(400).json({ success: false, message: "Add a split step first" });
         }
-
-        console.log("✅ Found Workflow & Split Step. Adding Sub-Path Step...");
 
         const newSubStep = {
             id: (workflow.splitStep.approvalPath.length + workflow.splitStep.rejectionPath.length) + 1,
@@ -182,26 +199,20 @@ const addSubPathStep = async (req, res) => {
         };
 
         if (type === "approval") {
-            console.log("📌 Adding to Approval Path");
             workflow.splitStep.approvalPath.push(newSubStep);
         } else if (type === "rejection") {
-            console.log("📌 Adding to Rejection Path");
             workflow.splitStep.rejectionPath.push(newSubStep);
         } else {
-            console.log("❌ Invalid type provided:", type);
             return res.status(400).json({ success: false, message: "Invalid type. Use 'approval' or 'rejection'." });
         }
 
         await workflow.save();
-        console.log("✅ Sub-Path Step Added Successfully!");
-
-        res.status(201).json({ success: true, message: "Sub-path step added successfully", splitStep: workflow.splitStep });
+        res.status(201).json({ success: true, message: "Sub-path step added", splitStep: workflow.splitStep });
     } catch (error) {
         console.error("❌ Error adding sub-path step:", error);
         res.status(500).json({ success: false, message: "Server error" });
     }
 };
-
 
 // 📌 Edit a Step
 const editStep = async (req, res) => {
@@ -210,19 +221,15 @@ const editStep = async (req, res) => {
         const { field, value } = req.body;
 
         const workflow = await ApprovalWorkflow.findOne({ plantCode });
-        if (!workflow) {
-            return res.status(404).json({ success: false, message: "Workflow not found" });
-        }
+        if (!workflow) return res.status(404).json({ success: false, message: "Workflow not found" });
 
         const step = workflow.steps.find(step => step.id == id);
-        if (!step) {
-            return res.status(404).json({ success: false, message: "Step not found" });
-        }
+        if (!step) return res.status(404).json({ success: false, message: "Step not found" });
 
         step[field] = value;
         await workflow.save();
 
-        res.status(200).json({ success: true, message: "Step updated successfully", steps: workflow.steps });
+        res.status(200).json({ success: true, message: "Step updated", steps: workflow.steps });
     } catch (error) {
         console.error("❌ Error editing step:", error);
         res.status(500).json({ success: false, message: "Server error" });
@@ -235,26 +242,17 @@ const deleteStep = async (req, res) => {
         const { plantCode, id } = req.params;
 
         const workflow = await ApprovalWorkflow.findOne({ plantCode });
-        if (!workflow) {
-            return res.status(404).json({ success: false, message: "Workflow not found" });
-        }
+        if (!workflow) return res.status(404).json({ success: false, message: "Workflow not found" });
 
         workflow.steps = workflow.steps.filter(step => step.id != id);
         await workflow.save();
 
-        res.status(200).json({ success: true, message: "Step deleted successfully", steps: workflow.steps });
+        res.status(200).json({ success: true, message: "Step deleted", steps: workflow.steps });
     } catch (error) {
         console.error("❌ Error deleting step:", error);
         res.status(500).json({ success: false, message: "Server error" });
     }
 };
 
-module.exports = {
-    getApprovalWorkflow,
-    setWorkflowStructure,
-    addStep,
-    addSplitStep,  // ✅ New function added
-    addSubPathStep, // ✅ New function added
-    editStep,
-    deleteStep
-};
+
+module.exports = { getApprovalWorkflow, setWorkflowStructure, addStep, addSplitStep, addSubPathStep, editStep, deleteStep , notifyFirstApprover};
