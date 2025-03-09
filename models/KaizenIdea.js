@@ -3,8 +3,15 @@ const mongoose = require("mongoose");
 const StageSchema = new mongoose.Schema({
   label: { type: String, required: true },
   description: { type: String, required: true },
-  timestamp: { type: Date, default: null },  // ✅ Timestamp is now optional
+  timestamp: { type: Date, default: null },  
   status: { type: String, enum: ["completed", "active", "error", "pending"], required: true }
+});
+
+const ApprovalHistorySchema = new mongoose.Schema({
+  approverEmail: { type: String, required: true },
+  decision: { type: String, enum: ["approved", "rejected"], required: true },
+  timestamp: { type: Date, default: Date.now },
+  comments: { type: String, trim: true, default: "" }
 });
 
 const KaizenIdeaSchema = new mongoose.Schema(
@@ -17,7 +24,10 @@ const KaizenIdeaSchema = new mongoose.Schema(
     implementerCode: { type: String, trim: true, default: "" },
     implementationDate: { type: String, trim: true, default: "" },
     date: { type: Date, default: Date.now },
-    registrationNumber: { type: String, unique: true, trim: true, default: "" },
+
+    // 🔹 Unique Kaizen Registration Number (Previously had default: "")
+    registrationNumber: { type: String, required: true, unique: true, trim: true },
+
     category: { type: String, required: true, trim: true },
     otherCategory: { type: String, trim: true, default: "" },
     problemStatement: { type: String, trim: true, default: "" },
@@ -30,24 +40,33 @@ const KaizenIdeaSchema = new mongoose.Schema(
     standardization: { type: String, trim: true, default: "" },
     horizontalDeployment: { type: String, trim: true, default: "" },
 
-    // 🔹 Status & Workflow Fields
+    // 🔹 Status & Workflow Tracking
     currentStage: { type: Number, default: 0 },
     isApproved: { type: Boolean, default: false },
+    currentApprover: { type: String, trim: true, default: "" }, // ✅ Track who is currently reviewing
+
     stages: {
-      type: [StageSchema], // ✅ Reference `StageSchema`
+      type: [StageSchema],
       default: [
         {
           label: "Initial Review",
           description: "Reviewed by the quality control team",
-          status: "pending",  // ✅ Ensure first stage is always "pending"
-          timestamp: null,     // ✅ No timestamp initially
+          status: "pending",
+          timestamp: null,
         },
       ],
     },
 
+    // 🔹 Approval History (For audit trail)
+    approvalHistory: {
+      type: [ApprovalHistorySchema],
+      default: []
+    },
+
+    // 🔹 More Meaningful Status Options
     status: {
       type: String,
-      enum: ["Pending", "Completed", "Inprogress"],
+      enum: ["Pending", "In Progress", "Approved", "Rejected"],
       default: "Pending",
     },
   },

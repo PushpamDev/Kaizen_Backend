@@ -38,8 +38,7 @@ const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/fileUploadRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const employeeVerificationRoutes = require("./routes/employeeVerificationRoutes");
-const approvalWorkflowRoutes = require("./routes/approvalWorkflowRoutes");
-
+const approvalWorkflowRoutes = require("./routes/ApprovalWorkflowRoutes");
 // Serve Static Files (Uploaded Files)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 

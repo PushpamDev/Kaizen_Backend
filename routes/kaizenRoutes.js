@@ -9,8 +9,6 @@ const {
     getKaizenIdeaByRegistrationNumber 
 } = require("../controllers/KaizenController");
 
-const { getKaizenStatusByRegNumber , updateKaizenStatus} = require("../controllers/kaizenStatusController"); // Import status update controller
-
 const router = express.Router();
 
 // Middleware to ensure form-data text fields are properly parsed
@@ -28,12 +26,6 @@ router.get("/by-registration", getKaizenIdeaByRegistrationNumber); // Fetch by r
 
 // Update a specific Kaizen
 router.put("/:id", updateKaizenIdea);
-
-// Get Kaizen status Bar
-// router.get("/status/:registrationNumber", getKaizenStatusByRegNumber);
-
-// Update Kaizen Status by Registration Number
-// router.put("/status/update/:registrationNumber", updateKaizenStatus);
 
 // Delete a specific Kaizen
 router.delete("/:id", deleteKaizenIdea);
