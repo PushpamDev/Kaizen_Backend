@@ -33,26 +33,29 @@ const startApprovalProcess = async (registrationNumber, plantCode, suggesterEmai
       console.error("Error starting approval process:", error.message);
   }
 };
-
-// 📌 Process an approval decision
+//process an approval decision
 const processApproval = async (registrationNumber, approverEmail, decision) => {
   try {
       const kaizen = await KaizenIdea.findOne({ registrationNumber });
       if (!kaizen) throw new Error("Kaizen idea not found.");
-      
+
+      if (kaizen.status === "Rejected") {
+          throw new Error("This Kaizen idea has already been rejected.");
+      }
+
       const plantCode = kaizen.plantCode;
       if (!plantCode) throw new Error("plantCode is missing from Kaizen Idea.");
 
       const workflow = await getWorkflowForPlant(plantCode);
       if (!workflow) throw new Error("Workflow not found for this plant.");
 
-      const currentStep = workflow.steps.find((step) => step.approverEmail === approverEmail);
+      const currentStep = workflow.steps.find(step => step.approverEmail === approverEmail);
       if (!currentStep) throw new Error("Approver is not part of the workflow.");
 
       let updateFields = {};
-      
+
       if (decision === "approved") {
-          const nextStep = workflow.steps.find((step) => step.parentStepId?.toString() === currentStep.stepId.toString());
+          const nextStep = workflow.steps.find(step => step.parentStepId?.toString() === currentStep.stepId.toString());
           if (nextStep) {
               updateFields.currentApprover = nextStep.approverEmail;
               sendApprovalEmail(nextStep.approverEmail, kaizen);
@@ -76,6 +79,7 @@ const processApproval = async (registrationNumber, approverEmail, decision) => {
       console.error("Error processing approval:", error.message);
   }
 };
+
 
 // 📌 Create or update an approval workflow
 const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {

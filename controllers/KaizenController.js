@@ -1,10 +1,11 @@
 const KaizenIdea = require("../models/KaizenIdea");
-const ApprovalWorkflow = require("../models/ApprovalWorkflow"); // Import Workflow Model
+const ApprovalWorkflow = require("../models/ApprovalWorkflow"); // Workflow Model
+const { startApprovalProcess } = require("./ApprovalWorkflowController"); // Approval Workflow Controller
+const { sendApprovalEmail } = require("../services/emailService"); // Email Service
 
-// Controller for creating a Kaizen idea
-const {sendApprovalEmail} = require("../services/emailService"); // Import email service
+// ✅ Create Kaizen Idea with File Uploads & Approval Workflow
 const createKaizenIdea = async (req, res) => {
-    console.log("Received request body:", req.body);
+    console.log("📩 Received Request Body:", req.body);
 
     try {
         const {
@@ -18,8 +19,6 @@ const createKaizenIdea = async (req, res) => {
             description,
             category,
             problemStatement,
-            beforeKaizen,
-            afterKaizen,
             benefits,
             implementationCost,
             benefitCostRatio,
@@ -30,6 +29,10 @@ const createKaizenIdea = async (req, res) => {
         if (!suggesterName || !employeeCode || !category) {
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
+
+        // ✅ Handle file uploads
+        const beforeKaizenFiles = req.body.beforeKaizenFileUrls || [];
+        const afterKaizenFiles = req.body.afterKaizenFileUrls || [];
 
         const newKaizen = new KaizenIdea({
             suggesterName,
@@ -42,13 +45,13 @@ const createKaizenIdea = async (req, res) => {
             description,
             category,
             problemStatement,
-            beforeKaizen,
-            afterKaizen,
             benefits,
             implementationCost,
             benefitCostRatio,
             standardization,
             horizontalDeployment,
+            beforeKaizenFiles,
+            afterKaizenFiles,
             isApproved: false,
             status: "Pending",
             currentStage: 0,
@@ -58,60 +61,54 @@ const createKaizenIdea = async (req, res) => {
 
         await newKaizen.save();
 
-        // ✅ Automatically start the approval process
+        // ✅ Start the approval process automatically
         await startApprovalProcess(registrationNumber, plantCode, suggesterName, newKaizen);
 
         res.status(201).json({ success: true, message: "Kaizen idea created successfully.", kaizen: newKaizen });
     } catch (error) {
-        console.error("Error creating Kaizen idea:", error);
+        console.error("❌ Error creating Kaizen idea:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-
-
-
-// Controller to get all Kaizen ideas with filtering, sorting, and pagination
+// ✅ Get All Kaizen Ideas with Filtering, Sorting & Pagination
 const getAllKaizenIdeas = async (req, res) => {
     try {
         const { status, category, sortBy, page = 1, limit = 10 } = req.query;
 
-        // Filtering options
         const filter = {};
         if (status) filter.status = status;
         if (category) filter.category = category;
 
-        // Sorting & Pagination options
         const sortOption = sortBy ? { [sortBy]: 1 } : { createdAt: -1 }; // Default: Newest first
         const pageNumber = Number(page) || 1;
         const pageLimit = Number(limit) || 10;
 
-        // Fetching filtered, sorted, paginated data with all required fields
         const ideas = await KaizenIdea.find(filter)
             .select(
-                "suggesterName employeeCode plantCode implementerName implementerCode implementationDate date registrationNumber category otherCategory problemStatement description beforeKaizen afterKaizen benefits implementationCost benefitCostRatio standardization horizontalDeployment status createdAt"
+                "suggesterName employeeCode plantCode implementerName implementerCode implementationDate date registrationNumber category otherCategory problemStatement description beforeKaizenFiles afterKaizenFiles benefits implementationCost benefitCostRatio standardization horizontalDeployment status createdAt"
             )
             .sort(sortOption)
             .skip((pageNumber - 1) * pageLimit) 
             .limit(pageLimit)
-            .lean(); // Converts Mongoose docs to plain JavaScript objects
+            .lean(); // Converts Mongoose docs to plain objects
 
-        // Ensuring missing fields return as `null` instead of being absent
+        // Ensure missing fields return as `null`
         const formattedIdeas = ideas.map(idea => ({
             suggesterName: idea.suggesterName || null,
             employeeCode: idea.employeeCode || null,
             plantCode: idea.plantCode || null,
             implementerName: idea.implementerName || null,
             implementerCode: idea.implementerCode || null,
-            implementationDate : idea.implementationDate || null,
+            implementationDate: idea.implementationDate || null,
             date: idea.date || null,
             registrationNumber: idea.registrationNumber || null,
             category: idea.category || null,
             otherCategory: idea.otherCategory || null,
             problemStatement: idea.problemStatement || null,
             description: idea.description || null,
-            beforeKaizen: idea.beforeKaizen || null,
-            afterKaizen: idea.afterKaizen || null,
+            beforeKaizenFiles: idea.beforeKaizenFiles || [],
+            afterKaizenFiles: idea.afterKaizenFiles || [],
             benefits: idea.benefits || null,
             implementationCost: idea.implementationCost || 0,
             benefitCostRatio: idea.benefitCostRatio || 0,
@@ -122,7 +119,7 @@ const getAllKaizenIdeas = async (req, res) => {
             _id: idea._id,
         }));
 
-        // Getting total count for pagination
+        // Get total count for pagination
         const totalIdeas = await KaizenIdea.countDocuments(filter);
 
         res.status(200).json({
@@ -132,60 +129,62 @@ const getAllKaizenIdeas = async (req, res) => {
             currentPage: pageNumber,
         });
     } catch (error) {
+        console.error("❌ Error fetching Kaizen ideas:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-
+// ✅ Get Kaizen Idea by Registration Number
 const getKaizenIdeaByRegistrationNumber = async (req, res) => {
     try {
-        console.log("Received Query Params:", req.query); // Debugging
-
         const { registrationNumber } = req.query;
 
         if (!registrationNumber) {
             return res.status(400).json({ success: false, message: "Registration number is required" });
         }
 
-        console.log("Searching for registration number:", registrationNumber); // Debugging
-
-        const idea = await KaizenIdea.findOne({ registrationNumber: registrationNumber });
+        const idea = await KaizenIdea.findOne({ registrationNumber });
 
         if (!idea) {
-            console.log("No Kaizen found for:", registrationNumber); // Debugging
             return res.status(404).json({ success: false, message: "Kaizen idea not found" });
         }
 
-        console.log("Kaizen Found:", idea); // Debugging
-        res.status(200).json({ success: true, idea });
+        res.status(200).json({
+            success: true,
+            idea: {
+                ...idea.toObject(),
+                beforeKaizenFiles: idea.beforeKaizenFiles || [],
+                afterKaizenFiles: idea.afterKaizenFiles || []
+            }
+        });
     } catch (error) {
-        console.error("🔥 Server Error:", error.message);
+        console.error("❌ Server Error:", error.message);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-
-
-
-
-// Controller to update a Kaizen idea
+// ✅ Update Kaizen Idea
 const updateKaizenIdea = async (req, res) => {
     try {
         const updatedIdea = await KaizenIdea.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!updatedIdea) return res.status(404).json({ success: false, message: "Kaizen idea not found" });
+
         res.status(200).json({ success: true, message: "Kaizen idea updated successfully", updatedIdea });
     } catch (error) {
+        console.error("❌ Error updating Kaizen idea:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-// Controller to delete a Kaizen idea
+// ✅ Delete Kaizen Idea
 const deleteKaizenIdea = async (req, res) => {
     try {
         const deletedIdea = await KaizenIdea.findByIdAndDelete(req.params.id);
         if (!deletedIdea) return res.status(404).json({ success: false, message: "Kaizen idea not found" });
+
         res.status(200).json({ success: true, message: "Kaizen idea deleted successfully" });
     } catch (error) {
+        console.error("❌ Error deleting Kaizen idea:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };

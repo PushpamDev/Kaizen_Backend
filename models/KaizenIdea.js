@@ -64,6 +64,10 @@ const KaizenIdeaSchema = new mongoose.Schema(
       enum: ["Pending", "In Progress", "Approved", "Rejected"],
       default: "Pending",
     },
+
+    // 🔹 Image Upload Fields
+    beforeKaizen: { type: String, trim: true, default: "" }, // Store image path or URL
+    afterKaizen: { type: String, trim: true, default: "" }, // Store image path or URL
   },
   { timestamps: true }
 );
