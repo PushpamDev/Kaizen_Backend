@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const {
   getWorkflowForPlant,
@@ -67,13 +68,30 @@ router.post("/", async (req, res) => {
   }
 });
 
-// 📌 Update an existing approval workflow
 router.put("/update/:workflowId", async (req, res) => {
+  const { workflowId } = req.params;
+  const { steps } = req.body;
+
   try {
-    const updatedWorkflow = await updateApprovalWorkflow(req.params.workflowId, req.body.steps);
-    res.status(200).json(updatedWorkflow);
+    // ✅ Validate workflowId
+    if (!mongoose.Types.ObjectId.isValid(workflowId)) {
+      return res.status(400).json({ message: "Invalid workflow ID format." });
+    }
+
+    // ✅ Ensure steps are provided
+    if (!steps || !Array.isArray(steps)) {
+      return res.status(400).json({ message: "Invalid or missing 'steps' array." });
+    }
+
+    const updatedWorkflow = await updateApprovalWorkflow(workflowId, steps);
+
+    res.status(200).json({
+      success: true,
+      message: "Approval workflow updated successfully.",
+      updatedWorkflow,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 

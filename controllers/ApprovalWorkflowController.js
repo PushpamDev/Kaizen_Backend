@@ -127,18 +127,26 @@ const createApprovalWorkflow = async (plantCode, steps) => {
 };
 
 // 📌 Update an existing approval workflow
-const updateApprovalWorkflow = async (workflowId, steps) => {
-    try {
-        const updatedWorkflow = await ApprovalWorkflow.findByIdAndUpdate(
-            workflowId,
-            { $set: { steps } },
-            { new: true }
-        );
-        if (!updatedWorkflow) throw new Error("Workflow not found");
-        return updatedWorkflow;
-    } catch (error) {
-        throw new Error("Error updating approval workflow: " + error.message);
-    }
+const updateApprovalWorkflow = async (workflowId, updatedSteps) => {
+  try {
+      const workflow = await ApprovalWorkflow.findById(workflowId);
+      if (!workflow) throw new Error("Workflow not found");
+
+      // Maintain revision history (keep last 5 versions)
+      if (!workflow.revisionHistory) workflow.revisionHistory = [];
+      if (workflow.revisionHistory.length >= 5) workflow.revisionHistory.shift(); // Remove oldest version
+
+      workflow.revisionHistory.push({ version: workflow.version, steps: workflow.steps });
+
+      // Update steps & increment version
+      workflow.steps = updatedSteps;
+      workflow.version += 1;
+      await workflow.save();
+
+      return workflow;
+  } catch (error) {
+      throw new Error("Error updating approval workflow: " + error.message);
+  }
 };
 
 // 📌 Delete an approval workflow
