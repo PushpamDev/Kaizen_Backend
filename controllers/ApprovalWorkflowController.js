@@ -35,11 +35,11 @@ const startApprovalProcess = async (registrationNumber, plantCode, kaizenData) =
 };
 
 
-const processApproval = async (registrationNumber, approverEmail, decision) => {
+const processApproval = async (registrationNumber, decision) => {
     try {
         const kaizen = await KaizenIdea.findOne({ registrationNumber });
         if (!kaizen) throw new Error("Kaizen idea not found.");
-
+  
         if (kaizen.status === "Rejected") {
             throw new Error("This Kaizen idea has already been rejected.");
         }
@@ -50,58 +50,57 @@ const processApproval = async (registrationNumber, approverEmail, decision) => {
         const workflow = await getWorkflowForPlant(plantCode);
         if (!workflow) throw new Error("Workflow not found for this plant.");
 
-        const currentStep = workflow.steps.find(step => step.approverEmail === approverEmail);
+        // ✅ Find the current approver (who needs to approve the idea now)
+        const currentStep = workflow.steps.find(step => step.approverEmail === kaizen.currentApprover);
         if (!currentStep) {
-            throw new Error(`Approver ${approverEmail} is not part of the workflow.`);
+            throw new Error(`Current approver not found in the workflow.`);
         }
 
         console.log("🔹 Current Step:", currentStep);
 
         let updateFields = {};
-        let responseMessage = "";
+        let nextApproverEmail = null;
 
         if (decision === "approved") {
             // ✅ Find the next step based on children
-            const nextStep = workflow.steps.find(
-                step => step.stepId === currentStep.children[0] // Get the first child step
-            );
-
+            const nextStep = workflow.steps.find(step => step.stepId === currentStep.children[0]); // First child step
             console.log("🔹 Next Step:", nextStep);
 
             if (nextStep) {
                 // ✅ Move to the next approver
                 updateFields.currentApprover = nextStep.approverEmail;
+                nextApproverEmail = nextStep.approverEmail;
                 sendApprovalEmail(nextStep.approverEmail, kaizen);
-                responseMessage = `Approval recorded. Waiting for approval from ${nextStep.approverEmail}`;
             } else {
                 // ✅ If no next step, mark as fully approved
                 updateFields.status = "Approved";
                 updateFields.isApproved = true;
                 updateFields.currentApprover = null;
-                responseMessage = "Kaizen idea has been fully approved!";
             }
         } else if (decision === "rejected") {
             updateFields.status = "Rejected";
             updateFields.isApproved = false;
             updateFields.currentApprover = null;
-            responseMessage = "Kaizen idea has been rejected.";
         }
 
         await KaizenIdea.updateOne({ registrationNumber }, { $set: updateFields });
         await KaizenIdea.updateOne(
             { registrationNumber },
-            { $push: { approvalHistory: { approverEmail, decision, timestamp: new Date() } } }
+            { $push: { approvalHistory: { approverEmail: currentStep.approverEmail, decision, timestamp: new Date() } } }
         );
 
-        console.log(`✅ Processed approval: ${decision} by ${approverEmail}`);
+        console.log(`✅ Processed approval: ${decision} by ${currentStep.approverEmail}`);
 
-        return responseMessage; // ✅ Return the custom message
+        return nextApproverEmail 
+            ? { message: `Approval recorded. Waiting for approval from ${nextApproverEmail}` }
+            : { message: `Kaizen idea ${decision} successfully!` };
 
     } catch (error) {
         console.error("🚨 Error processing approval:", error.message);
         throw new Error(error.message);
     }
 };
+
 
 
   

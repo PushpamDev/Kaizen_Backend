@@ -57,55 +57,13 @@ const generateKaizenPDF = (kaizenData) => {
  * @param {string} email - Recipient email
  * @param {Object} kaizenData - Kaizen Idea details
  */
-const sendKaizenSubmissionEmail = async (email, kaizenData) => {
-    try {
-        console.log("📨 Preparing to send Kaizen submission email to:", email);
-
-        // 📌 Generate PDF Attachment
-        const pdfPath = await generateKaizenPDF(kaizenData);
-
-        // 📌 Email Content (HTML)
-        const mailOptions = {
-            from: process.env.SMTP_USER,
-            to: email,
-            subject: "Kaizen Idea Submitted Successfully ✅",
-            html: `
-                <p>Dear <strong>${kaizenData.suggesterName}</strong>,</p>
-                <p>Your Kaizen idea has been successfully submitted! 🎉</p>
-                <p><strong>Registration Number:</strong> ${kaizenData.registrationNumber}</p>
-                <p><strong>Category:</strong> ${kaizenData.category}</p>
-                <p><strong>Description:</strong> ${kaizenData.description}</p>
-                <p>Thank you for your contribution!</p>
-                <p>Best regards,</p>
-                <p><strong>Kaizen Team</strong></p>
-            `,
-            attachments: [
-                {
-                    filename: `Kaizen_${kaizenData.registrationNumber}.pdf`,
-                    path: pdfPath,
-                },
-            ],
-        };
-
-        // 📌 Send Email
-        const info = await transporter.sendMail(mailOptions);
-        console.log("📧 Email sent successfully:", info.messageId);
-
-        // ✅ Cleanup: Delete PDF after sending
-        fs.unlinkSync(pdfPath);
-    } catch (error) {
-        console.error("❌ Error sending submission email:", error);
-    }
-};
-
-/**
- * Sends an approval request email to an approver.
- * @param {string} approverEmail - Approver's email
- * @param {Object} kaizenData - Kaizen Idea details
- */
 const sendApprovalEmail = async (approverEmail, kaizenData) => {
     try {
         console.log(`📨 Sending approval email to: ${approverEmail}`);
+
+        // Define API URLs for approval and rejection
+        const approveUrl = `http://your-api.com/api/approval-workflow/approve/${kaizenData.registrationNumber}?approverEmail=${approverEmail}&decision=approved`;
+        const rejectUrl = `http://your-api.com/api/approval-workflow/approve/${kaizenData.registrationNumber}?approverEmail=${approverEmail}&decision=rejected`;
 
         const mailOptions = {
             from: process.env.SMTP_USER,
@@ -119,7 +77,24 @@ const sendApprovalEmail = async (approverEmail, kaizenData) => {
                     <li><strong>Submitted By:</strong> ${kaizenData.suggesterName}</li>
                     <li><strong>Description:</strong> ${kaizenData.description}</li>
                 </ul>
-                <p>Please review the idea and take necessary action.</p>
+                <p>Please review the idea and take necessary action:</p>
+                
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                    <tr>
+                        <td align="center" style="border-radius: 5px;" bgcolor="#28a745">
+                            <a href="${approveUrl}" target="_blank" style="display: inline-block; font-family: Arial, sans-serif; font-size: 16px; color: #ffffff; text-decoration: none; background-color: #28a745; padding: 12px 24px; border-radius: 5px; border: 1px solid #28a745; font-weight: bold;">
+                                ✅ Approve
+                            </a>
+                        </td>
+                        <td width="20"></td>
+                        <td align="center" style="border-radius: 5px;" bgcolor="#dc3545">
+                            <a href="${rejectUrl}" target="_blank" style="display: inline-block; font-family: Arial, sans-serif; font-size: 16px; color: #ffffff; text-decoration: none; background-color: #dc3545; padding: 12px 24px; border-radius: 5px; border: 1px solid #dc3545; font-weight: bold;">
+                                ❌ Reject
+                            </a>
+                        </td>
+                    </tr>
+                </table>
+
                 <p>Best Regards,</p>
                 <p><strong>Kaizen Team</strong></p>
             `,
@@ -132,4 +107,10 @@ const sendApprovalEmail = async (approverEmail, kaizenData) => {
     }
 };
 
-module.exports = { sendKaizenSubmissionEmail, sendApprovalEmail };
+
+
+
+
+
+
+module.exports = {  sendApprovalEmail };

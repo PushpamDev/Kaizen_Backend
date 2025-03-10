@@ -22,15 +22,18 @@ router.get("/:plantCode", async (req, res) => {
 
 router.post("/approve/:registrationNumber", async (req, res) => {
   try {
-    const { approverEmail, decision } = req.body;
+    const { decision } = req.body;
     const { registrationNumber } = req.params;
 
-    const message = await processApproval(registrationNumber, approverEmail, decision);
-    res.status(200).json({ message });
+    // ✅ Process approval
+    const responseMessage = await processApproval(registrationNumber, decision);
+    
+    res.status(200).json(responseMessage);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
+
 
 // 📌 Create a new approval workflow for a plant
 router.post("/", async (req, res) => {
