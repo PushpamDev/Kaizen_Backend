@@ -8,8 +8,7 @@ const getWorkflowForPlant = async (plantCode) => {
     return await ApprovalWorkflow.findOne({ plantCode }).sort({ version: -1 });
 };
 
-// 📌 Start the approval process when a Kaizen idea is submitted
-const startApprovalProcess = async (registrationNumber, plantCode, suggesterEmail, kaizenData) => {
+const startApprovalProcess = async (registrationNumber, plantCode, kaizenData) => {
   try {
       const workflow = await getWorkflowForPlant(plantCode);
       if (!workflow) throw new Error("No workflow found for this plant.");
@@ -19,20 +18,23 @@ const startApprovalProcess = async (registrationNumber, plantCode, suggesterEmai
 
       let nextApprover = firstStep.approverEmail;
       
-      // Assign the first approver
+      // ✅ Assign the first approver
       await KaizenIdea.updateOne(
           { registrationNumber },
           { $set: { currentApprover: nextApprover, status: "Pending Approval" } }
       );
 
-      // Send Email Notifications
-      await sendKaizenSubmissionEmail(suggesterEmail, kaizenData);
+      console.log("✅ Assigned first approver:", nextApprover);
+
+      // ✅ Send Approval Email Only (No submission email to the suggester)
       await sendApprovalEmail(nextApprover, kaizenData);
 
   } catch (error) {
-      console.error("Error starting approval process:", error.message);
+      console.error("❌ Error starting approval process:", error.message);
   }
 };
+
+
 //process an approval decision
 const processApproval = async (registrationNumber, approverEmail, decision) => {
   try {
