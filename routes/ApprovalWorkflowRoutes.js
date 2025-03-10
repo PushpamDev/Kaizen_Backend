@@ -20,12 +20,13 @@ router.get("/:plantCode", async (req, res) => {
 });
 
 
-// 📌 Process an approval decision
-router.post("/approve", async (req, res) => {
+router.post("/approve/:registrationNumber", async (req, res) => {
   try {
-    const { registrationNumber, approverEmail, decision } = req.body;
-    await processApproval(registrationNumber, approverEmail, decision);
-    res.status(200).json({ message: "Approval decision processed successfully" });
+    const { approverEmail, decision } = req.body;
+    const { registrationNumber } = req.params;
+
+    const message = await processApproval(registrationNumber, approverEmail, decision);
+    res.status(200).json({ message });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
