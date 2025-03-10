@@ -2,7 +2,7 @@ const KaizenIdea = require("../models/KaizenIdea");
 const ApprovalWorkflow = require("../models/ApprovalWorkflow"); // Import Workflow Model
 
 // Controller for creating a Kaizen idea
-const {sendKaizenSubmissionEmail, sendApprovalEmail} = require("../services/emailService"); // Import email service
+const {sendApprovalEmail} = require("../services/emailService"); // Import email service
 const createKaizenIdea = async (req, res) => {
     console.log("Received request body:", req.body);
 
@@ -11,7 +11,6 @@ const createKaizenIdea = async (req, res) => {
             suggesterName,
             employeeCode,
             plantCode,
-            email,
             implementerName,
             implementerCode,
             implementationDate,
@@ -28,7 +27,7 @@ const createKaizenIdea = async (req, res) => {
             horizontalDeployment
         } = req.body;
 
-        if (!suggesterName || !employeeCode || !category || !email) {
+        if (!suggesterName || !employeeCode || !category) {
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
@@ -36,7 +35,6 @@ const createKaizenIdea = async (req, res) => {
             suggesterName,
             employeeCode,
             plantCode,
-            email,
             implementerName,
             implementerCode,
             implementationDate,
@@ -51,50 +49,17 @@ const createKaizenIdea = async (req, res) => {
             benefitCostRatio,
             standardization,
             horizontalDeployment,
-
             isApproved: false,
             status: "Pending",
             currentStage: 0,
-            currentApprover: "", // Will be updated after getting workflow
-            stages: [
-                {
-                    label: "Initial Review",
-                    description: "Reviewed by the quality control team",
-                    status: "pending",
-                    timestamp: null,
-                }
-            ]
+            currentApprover: "",
+            stages: []
         });
 
         await newKaizen.save();
 
-        // ✅ Fetch approval workflow for the plant
-        const workflow = await ApprovalWorkflow.findOne({ plantCode });
-
-        if (!workflow || !workflow.steps || workflow.steps.length === 0) {
-            console.error("❌ No approval workflow found for plant:", plantCode);
-            return res.status(400).json({ success: false, message: "No approval workflow found for this plant." });
-        }
-
-        // ✅ Get the first approver
-        const firstStep = workflow.steps.find(step => step.order === 1);
-        if (!firstStep) {
-            console.error("❌ No first approval step found.");
-            return res.status(400).json({ success: false, message: "Invalid approval workflow configuration." });
-        }
-
-        const firstApproverEmail = firstStep.approverEmail;
-
-        // ✅ Update Kaizen with first approver details
-        await KaizenIdea.findByIdAndUpdate(newKaizen._id, {
-            status: "In Progress",
-            currentApprover: firstApproverEmail,
-            "stages.0.status": "active"
-        });
-
-        // ✅ Send email notifications
-        await sendKaizenSubmissionEmail(email, newKaizen); // Email to suggester
-        await sendApprovalEmail(firstApproverEmail, newKaizen); // Email to first approver
+        // ✅ Automatically start the approval process
+        await startApprovalProcess(registrationNumber, plantCode, suggesterName, newKaizen);
 
         res.status(201).json({ success: true, message: "Kaizen idea created successfully.", kaizen: newKaizen });
     } catch (error) {
@@ -102,6 +67,8 @@ const createKaizenIdea = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
+
 
 
 // Controller to get all Kaizen ideas with filtering, sorting, and pagination
@@ -196,6 +163,7 @@ const getKaizenIdeaByRegistrationNumber = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
 
 
 

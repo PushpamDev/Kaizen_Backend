@@ -1,31 +1,33 @@
 const mongoose = require("mongoose");
 
+// 🔹 Schema for individual approval stages
 const StageSchema = new mongoose.Schema({
   label: { type: String, required: true },
   description: { type: String, required: true },
-  timestamp: { type: Date, default: null },  
+  timestamp: { type: Date, default: Date.now }, // ✅ Defaults to Date.now for accurate timestamps
   status: { type: String, enum: ["completed", "active", "error", "pending"], required: true }
 });
 
+// 🔹 Schema for tracking approval history
 const ApprovalHistorySchema = new mongoose.Schema({
   approverEmail: { type: String, required: true },
   decision: { type: String, enum: ["approved", "rejected"], required: true },
   timestamp: { type: Date, default: Date.now },
-  comments: { type: String, trim: true, default: "" }
+  comments: { type: String, trim: true, default: "" } // ✅ Trimmed comments to remove extra spaces
 });
 
+// 🔹 Main Kaizen Idea Schema
 const KaizenIdeaSchema = new mongoose.Schema(
   {
     suggesterName: { type: String, required: true, trim: true },
     employeeCode: { type: String, required: true, trim: true },
     plantCode: { type: String, required: true, trim: true },
-    email: { type: String, required: true, trim: true },
     implementerName: { type: String, trim: true, default: "" },
     implementerCode: { type: String, trim: true, default: "" },
-    implementationDate: { type: String, trim: true, default: "" },
+    implementationDate: { type: Date, default: null }, // ✅ Ensured date format is correct
     date: { type: Date, default: Date.now },
 
-    // 🔹 Unique Kaizen Registration Number (Previously had default: "")
+    // 🔹 Unique Kaizen Registration Number
     registrationNumber: { type: String, required: true, unique: true, trim: true },
 
     category: { type: String, required: true, trim: true },
@@ -43,18 +45,11 @@ const KaizenIdeaSchema = new mongoose.Schema(
     // 🔹 Status & Workflow Tracking
     currentStage: { type: Number, default: 0 },
     isApproved: { type: Boolean, default: false },
-    currentApprover: { type: String, trim: true, default: "" }, // ✅ Track who is currently reviewing
+    currentApprover: { type: String, trim: true, default: "" }, // ✅ Tracks who is currently reviewing
 
     stages: {
       type: [StageSchema],
-      default: [
-        {
-          label: "Initial Review",
-          description: "Reviewed by the quality control team",
-          status: "pending",
-          timestamp: null,
-        },
-      ],
+      default: [],
     },
 
     // 🔹 Approval History (For audit trail)
