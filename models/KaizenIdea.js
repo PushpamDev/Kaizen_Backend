@@ -66,8 +66,8 @@ const KaizenIdeaSchema = new mongoose.Schema(
     },
 
     // 🔹 Image Upload Fields
-    beforeKaizen: { type: String, trim: true, default: "" }, // Store image path or URL
-    afterKaizen: { type: String, trim: true, default: "" }, // Store image path or URL
+    beforeKaizenFiles: { type: [String], default: [] }, // Store image path or URL
+    afterKaizenFiles: { type: [String], default: [] }, // Store image path or URL
   },
   { timestamps: true }
 );

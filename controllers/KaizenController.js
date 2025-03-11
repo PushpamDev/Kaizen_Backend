@@ -2,6 +2,7 @@ const KaizenIdea = require("../models/KaizenIdea");
 const ApprovalWorkflow = require("../models/ApprovalWorkflow"); // Workflow Model
 const { startApprovalProcess } = require("./ApprovalWorkflowController"); // Approval Workflow Controller
 const { sendApprovalEmail } = require("../services/emailService"); // Email Service
+const uploadMiddleware = require("../middleware/uploadMiddleware");
 
 const createKaizenIdea = async (req, res) => {
     console.log("📩 Received Request Body:", req.body);
@@ -25,21 +26,23 @@ const createKaizenIdea = async (req, res) => {
             implementationCost,
             benefitCostRatio,
             standardization,
-            horizontalDeployment
+            horizontalDeployment,
+            beforeKaizenFiles,
+            afterKaizenFiles
         } = req.body;
 
         if (!suggesterName || !employeeCode || !category) {
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
-        // ✅ Handle file uploads properly
-        const beforeKaizenFiles = req.files?.beforeKaizenFiles
-            ? req.files.beforeKaizenFiles.map(file => `/uploads/${file.filename}`)
-            : [];
+        // ✅ Extract file paths correctly
+        // const beforeKaizenFiles = req.files?.beforeKaizenFiles
+        //     ? req.files.beforeKaizenFiles.map(file => `/uploads/${file.filename}`)
+        //     : [];
 
-        const afterKaizenFiles = req.files?.afterKaizenFiles
-            ? req.files.afterKaizenFiles.map(file => `/uploads/${file.filename}`)
-            : [];
+        // const afterKaizenFiles = req.files?.afterKaizenFiles
+        //     ? req.files.afterKaizenFiles.map(file => `/uploads/${file.filename}`)
+        //     : [];
 
         console.log("✅ Mapped File URLs:", { beforeKaizenFiles, afterKaizenFiles });
 
@@ -61,8 +64,8 @@ const createKaizenIdea = async (req, res) => {
             afterKaizen,
             standardization,
             horizontalDeployment,
-            beforeKaizenFiles,
-            afterKaizenFiles,
+            beforeKaizenFiles, // ✅ Ensure these fields are saved
+            afterKaizenFiles,   // ✅ Ensure these fields are saved
             isApproved: false,
             status: "Pending",
             currentStage: 0,
@@ -81,6 +84,8 @@ const createKaizenIdea = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
+
 
 // ✅ Get All Kaizen Ideas with Filtering, Sorting & Pagination
 const getAllKaizenIdeas = async (req, res) => {
@@ -127,7 +132,6 @@ const getAllKaizenIdeas = async (req, res) => {
 };
 
 
-// ✅ Get Kaizen Idea by Registration Number
 const getKaizenIdeaByRegistrationNumber = async (req, res) => {
     try {
         const { registrationNumber } = req.query;
@@ -146,9 +150,11 @@ const getKaizenIdeaByRegistrationNumber = async (req, res) => {
         const baseUrl = `${req.protocol}://${req.get("host")}`;
         const formattedIdea = {
             ...idea,
-            beforeKaizenFiles: idea.beforeKaizenFiles?.map(file => `${baseUrl}${file}`) || [],
-            afterKaizenFiles: idea.afterKaizenFiles?.map(file => `${baseUrl}${file}`) || [],
+            beforeKaizenFiles: idea.beforeKaizenFiles?.map(file => `${baseUrl}/uploads/${file}`) || [],
+            afterKaizenFiles: idea.afterKaizenFiles?.map(file => `${baseUrl}/uploads/${file}`) || [],
         };
+
+        console.log("🔗 Formatted File URLs:", formattedIdea.beforeKaizenFiles, formattedIdea.afterKaizenFiles);
 
         res.status(200).json({ success: true, idea: formattedIdea });
     } catch (error) {
@@ -156,6 +162,9 @@ const getKaizenIdeaByRegistrationNumber = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
+
+
 
 // ✅ Update Kaizen Idea
 const updateKaizenIdea = async (req, res) => {
