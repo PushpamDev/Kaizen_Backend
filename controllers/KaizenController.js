@@ -35,7 +35,7 @@ const createKaizenIdea = async (req, res) => {
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
-        // ✅ Extract file paths correctly
+        // // ✅ Extract file paths correctly
         // const beforeKaizenFiles = req.files?.beforeKaizenFiles
         //     ? req.files.beforeKaizenFiles.map(file => `/uploads/${file.filename}`)
         //     : [];
@@ -102,7 +102,7 @@ const getAllKaizenIdeas = async (req, res) => {
 
         const ideas = await KaizenIdea.find(filter)
             .select(
-                "suggesterName employeeCode plantCode implementerName implementerCode implementationDate date registrationNumber category problemStatement description beforeKaizenFiles afterKaizenFiles benefits implementationCost benefitCostRatio standardization horizontalDeployment status createdAt"
+                "suggesterName employeeCode plantCode implementerName implementerCode implementationDate date registrationNumber category problemStatement description beforeKaizen afterKaizen beforeKaizenFiles afterKaizenFiles benefits implementationCost benefitCostRatio standardization horizontalDeployment status createdAt"
             )
             .sort(sortOption)
             .skip((pageNumber - 1) * pageLimit)
@@ -113,8 +113,8 @@ const getAllKaizenIdeas = async (req, res) => {
         const baseUrl = `${req.protocol}://${req.get("host")}`;
         const formattedIdeas = ideas.map(idea => ({
             ...idea,
-            beforeKaizenFiles: idea.beforeKaizenFiles?.map(file => `${baseUrl}${file}`) || [],
-            afterKaizenFiles: idea.afterKaizenFiles?.map(file => `${baseUrl}${file}`) || [],
+            beforeKaizenFiles: idea.beforeKaizenFiles?.map(file => `${file}`) || [],
+            afterKaizenFiles: idea.afterKaizenFiles?.map(file => `${file}`) || [],
         }));
 
         const totalIdeas = await KaizenIdea.countDocuments(filter);
@@ -150,8 +150,8 @@ const getKaizenIdeaByRegistrationNumber = async (req, res) => {
         const baseUrl = `${req.protocol}://${req.get("host")}`;
         const formattedIdea = {
             ...idea,
-            beforeKaizenFiles: idea.beforeKaizenFiles?.map(file => `${baseUrl}/uploads/${file}`) || [],
-            afterKaizenFiles: idea.afterKaizenFiles?.map(file => `${baseUrl}/uploads/${file}`) || [],
+            beforeKaizenFiles: idea.beforeKaizenFiles?.map(file => `${file}`) || [],
+            afterKaizenFiles: idea.afterKaizenFiles?.map(file => `${file}`) || [],
         };
 
         console.log("🔗 Formatted File URLs:", formattedIdea.beforeKaizenFiles, formattedIdea.afterKaizenFiles);

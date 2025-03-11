@@ -105,38 +105,70 @@ const processApproval = async (registrationNumber, decision) => {
 
   
 
-// 📌 Create or update an approval workflow
 const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
-  try {
-      if (!steps || !Array.isArray(steps) || steps.length === 0) {
-          throw new Error("Approval workflow must have at least one step.");
-      }
+    try {
+        if (!steps || !Array.isArray(steps) || steps.length === 0) {
+            throw new Error("Approval workflow must have at least one step.");
+        }
 
-      let workflow = await ApprovalWorkflow.findOne({ plantCode });
+        let workflow = await ApprovalWorkflow.findOne({ plantCode });
 
-      if (workflow) {
-          if (workflow.history.length >= 5) {
-              workflow.history.shift();
-          }
-          workflow.history.push({
-              version: workflow.version,
-              changes: "Updated approval steps",
-              updatedBy,
-              updatedAt: new Date(),
-          });
+        if (workflow) {
+            if (workflow.history.length >= 5) {
+                workflow.history.shift();
+            }
+            workflow.history.push({
+                version: workflow.version,
+                changes: "Updated approval steps",
+                updatedBy,
+                updatedAt: new Date(),
+            });
 
-          workflow.steps = steps;
-          workflow.version += 1;
-      } else {
-          workflow = new ApprovalWorkflow({ plantCode, steps });
-      }
+            workflow.steps = steps;
+            workflow.version += 1;
+        } else {
+            workflow = new ApprovalWorkflow({ plantCode, steps, version: 1 });
+        }
 
-      await workflow.save();
-      return workflow;
-  } catch (error) {
-      throw new Error("Error creating/updating approval workflow: " + error.message);
-  }
+        await workflow.save();
+
+        // 🔥 Format steps into a nested structure before returning
+        const nestedSteps = buildNestedSteps(workflow.steps);
+
+        return {
+            plantCode: workflow.plantCode,
+            version: workflow.version,
+            steps: nestedSteps,
+            history: workflow.history,
+        };
+    } catch (error) {
+        throw new Error("Error creating/updating approval workflow: " + error.message);
+    }
 };
+
+// 📌 Helper function to build a nested tree from steps
+const buildNestedSteps = (steps) => {
+    const stepMap = new Map();
+    const rootSteps = [];
+
+    // First pass: Create a map of all steps
+    steps.forEach(step => stepMap.set(step._id.toString(), { ...step.toObject(), children: [] }));
+
+    // Second pass: Assign children to their respective parents
+    stepMap.forEach((step) => {
+        if (step.parentStepId) {
+            const parent = stepMap.get(step.parentStepId.toString());
+            if (parent) {
+                parent.children.push(step);
+            }
+        } else {
+            rootSteps.push(step);
+        }
+    });
+
+    return rootSteps;
+};
+
 
 // 📌 Delete an approval workflow
 const deleteApprovalWorkflow = async (workflowId) => {
