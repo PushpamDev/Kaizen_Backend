@@ -17,8 +17,8 @@ const storage = multer.diskStorage({
         cb(null, uploadDir); // ✅ Save files in 'uploads/' directory
     },
     filename: function (req, file, cb) {
-        const ext = path.extname(file.originalname).toLowerCase();
-        cb(null, Date.now() + ext); // ✅ Generate unique filename
+        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+        cb(null, uniqueSuffix + path.extname(file.originalname).toLowerCase()); // ✅ Unique filename
     }
 });
 
@@ -31,27 +31,29 @@ const fileFilter = (req, file, cb) => {
     cb(null, true);
 };
 
-// Multer Middleware (Limit file size to 5MB)
+// Multer Middleware (Limit file size to 5MB, max 10 files)
 const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
-}).array("files", 5); // ✅ Change 'files' to match your frontend input name
+}).array("files", 10); // ✅ Change 'files' to match your frontend input name
 
 // Upload File Controller
 const uploadFiles = (req, res) => {
     upload(req, res, function (err) {
-        if (err) {
-            return res.status(400).json({ success: false, message: err.message });
+        if (err instanceof multer.MulterError) {
+            return res.status(400).json({ success: false, message: `Multer error: ${err.message}` });
+        } else if (err) {
+            return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });
         }
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ success: false, message: "No files uploaded" });
         }
 
-        // Map uploaded files to return only necessary details
+        // Generate full file URLs dynamically
         const uploadedFiles = req.files.map(file => ({
             filename: file.filename,
-            fileUrl: `/uploads/${file.filename}`,
+            fileUrl: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`, // ✅ Full URL
             mimetype: file.mimetype,
             size: file.size
         }));

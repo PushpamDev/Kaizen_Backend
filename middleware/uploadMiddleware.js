@@ -44,28 +44,31 @@ const uploadKaizenFiles = upload.fields([
     { name: "afterKaizenDocs", maxCount: 10 }
 ]);
 
-// Middleware to map file URLs to request body
+// Middleware to map file URLs to response
 const mapFilesToFields = (req, res, next) => {
     try {
-        if (req.files) {
-            ["beforeKaizenFiles", "afterKaizenFiles", "beforeKaizenDocs", "afterKaizenDocs"].forEach(field => {
-                if (req.files[field]) {
-                    // Convert file paths to URLs
-                    const fileUrls = req.files[field].map(file => `/uploads/${file.filename}`);
-                    
-                    // Assign URLs to request body fields
-                    if (field === "beforeKaizenFiles") {
-                        req.body.beforeKaizenFileUrls = fileUrls;
-                    } else if (field === "afterKaizenFiles") {
-                        req.body.afterKaizenFileUrls = fileUrls;
-                    } else {
-                        req.body[field] = fileUrls;
-                    }
-                }
-            });
+        if (!req.files) {
+            return res.status(400).json({ success: false, message: "No files uploaded." });
         }
-        console.log("Uploaded File URLs:", req.body); // Debugging log
-        next();
+
+        const fileUrls = {};
+        ["beforeKaizenFiles", "afterKaizenFiles", "beforeKaizenDocs", "afterKaizenDocs"].forEach(field => {
+            if (req.files[field]) {
+                // Convert file paths to absolute URLs
+                fileUrls[field] = req.files[field].map(file => 
+                    `${req.protocol}://${req.get("host")}/uploads/${file.filename}`
+                );
+            }
+        });
+
+        console.log("Uploaded File URLs:", fileUrls); // Debugging log
+
+        // Send response with file URLs
+        res.status(200).json({
+            success: true,
+            message: "Files uploaded successfully.",
+            fileUrls
+        });
     } catch (error) {
         console.error("Error mapping files:", error);
         res.status(500).json({ success: false, message: "Internal Server Error" });
