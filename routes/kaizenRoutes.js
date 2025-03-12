@@ -1,4 +1,6 @@
 const express = require("express");
+const router = express.Router();
+const KaizenIdea = require("../models/KaizenIdea");
 
 // Import controller functions
 const { 
@@ -6,29 +8,31 @@ const {
     updateKaizenIdea, 
     deleteKaizenIdea, 
     getAllKaizenIdeas, 
-    getKaizenIdeaByRegistrationNumber 
+    getKaizenIdeaByRegistrationNumber,
+    getIdeasByStatus
 } = require("../controllers/KaizenController");
-
-const router = express.Router();
 
 // ✅ Middleware to parse JSON & URL-encoded data
 router.use(express.json());
 router.use(express.urlencoded({ extended: true }));
 
-// ✅ `createKaizenIdea` now expects **only JSON** (No multer here)
+// ✅ Create a new Kaizen idea
 router.post("/create", createKaizenIdea);
 
-// List all Kaizens with pagination & filters
+// ✅ List all Kaizens with pagination & filters
 router.get("/", getAllKaizenIdeas);
 
-// Get a specific Kaizen by registration number
+// ✅ Get a specific Kaizen by registration number
 router.get("/by-registration", getKaizenIdeaByRegistrationNumber);
 
-// Update a specific Kaizen
+// ✅ Update a specific Kaizen
 router.put("/:id", updateKaizenIdea);
 
-// Delete a specific Kaizen
+// ✅ Delete a specific Kaizen
 router.delete("/:id", deleteKaizenIdea);
+
+// Get Kaizens by status
+router.get("/status", getIdeasByStatus);
 
 // ✅ Global error handler
 router.use((err, req, res, next) => {

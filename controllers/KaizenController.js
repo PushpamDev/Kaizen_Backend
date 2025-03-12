@@ -192,10 +192,32 @@ const deleteKaizenIdea = async (req, res) => {
     }
 };
 
+// 📌 Fetch Kaizen ideas by status
+const getIdeasByStatus = async (req, res) => {
+    try {
+        const { status } = req.query; // Get status from query params
+        if (!status) {
+            return res.status(400).json({ message: "Status parameter is required." });
+        }
+
+        const validStatuses = ["Approved", "Pending Approval", "Rejected"];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ message: "Invalid status provided." });
+        }
+
+        const ideas = await KaizenIdea.find({ status });
+        res.status(200).json(ideas);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching ideas", error: error.message });
+    }
+};
+
 module.exports = {
     createKaizenIdea,
     getAllKaizenIdeas,
     getKaizenIdeaByRegistrationNumber,
     updateKaizenIdea,
-    deleteKaizenIdea
+    deleteKaizenIdea,
+    getIdeasByStatus
+    
 };
