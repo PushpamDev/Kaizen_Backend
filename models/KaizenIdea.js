@@ -12,6 +12,8 @@ const StageSchema = new mongoose.Schema({
 const ApprovalHistorySchema = new mongoose.Schema({
   approverEmail: { type: String, required: true },
   decision: { type: String, enum: ["approved", "rejected"], required: true },
+  stepId: { type: String, required: true }, // ✅ Track which step was approved
+  role: { type: String, required: true }, // ✅ Store the approver's role
   timestamp: { type: Date, default: Date.now },
   comments: { type: String, trim: true, default: "" } // ✅ Trimmed comments to remove extra spaces
 });
@@ -45,7 +47,8 @@ const KaizenIdeaSchema = new mongoose.Schema(
     // 🔹 Status & Workflow Tracking
     currentStage: { type: Number, default: 0 },
     isApproved: { type: Boolean, default: false },
-    currentApprover: { type: String, trim: true, default: "" }, // ✅ Tracks who is currently reviewing
+    currentApprovers: { type: [String], default: [] }, // ✅ Supports multiple approvers
+    workflowVersion: { type: Number, default: null }, // ✅ Tracks workflow version for approvals
 
     stages: {
       type: [StageSchema],
@@ -61,10 +64,10 @@ const KaizenIdeaSchema = new mongoose.Schema(
     // 🔹 More Meaningful Status Options
     status: {
       type: String,
-      enum: ["Pending", "In Progress", "Approved", "Rejected"],
+      enum: ["Pending", "Pending Approval", "Approved", "Rejected"], // ✅ Now supports "Pending Approval"
       default: "Pending",
     },
-
+    
     // 🔹 Image Upload Fields
     beforeKaizenFiles: { type: [String], default: [] }, // Store image path or URL
     afterKaizenFiles: { type: [String], default: [] }, // Store image path or URL

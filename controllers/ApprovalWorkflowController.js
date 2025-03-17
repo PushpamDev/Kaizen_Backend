@@ -3,40 +3,60 @@ const KaizenIdea = require("../models/KaizenIdea");
 const { sendApprovalEmail } = require("../services/emailService");
 const mongoose = require("mongoose");
 
-//  Fetch the latest workflow for a specific plant
+// Fetch the latest workflow for a specific plant
 const getWorkflowForPlant = async (plantCode) => {
     return await ApprovalWorkflow.findOne({ plantCode }).sort({ version: -1 }).lean();
 };
 
 const startApprovalProcess = async (registrationNumber, plantCode, kaizenData) => {
-  try {
-      const workflow = await getWorkflowForPlant(plantCode);
-      if (!workflow) throw new Error("No workflow found for this plant.");
+    try {
+        console.log("🔹 Starting approval process for:", { registrationNumber, plantCode });
 
-      let firstStep = workflow.steps.find((step) => !step.parentStepId);
-      if (!firstStep) throw new Error("Workflow is incorrectly configured.");
+        const workflow = await getWorkflowForPlant(plantCode);
+        console.log("🔹 Retrieved workflow:", workflow);
 
-      let nextApprover = firstStep.approverEmail;
-      
-      // ✅ Assign the first approver
-      await KaizenIdea.updateOne(
-          { registrationNumber },
-          { $set: { currentApprover: nextApprover, status: "Pending Approval" } }
-      );
+        if (!workflow) throw new Error("No workflow found for this plant.");
 
-      console.log("✅ Assigned first approver:", nextApprover);
+        let firstStep = workflow.steps.find((step) => !step.parentStepId);
+        console.log("🔹 First step found:", firstStep);
 
-      // ✅ Send Approval Email Only (No submission email to the suggester)
-      await sendApprovalEmail(nextApprover, kaizenData);
+        if (!firstStep) throw new Error("Workflow is incorrectly configured.");
 
-  } catch (error) {
-      console.error("❌ Error starting approval process:", error.message);
-  }
+        // ✅ Fix: Handle both `approverEmails` (array) and `approverEmail` (single string)
+        let nextApprover = Array.isArray(firstStep.approverEmails) 
+            ? firstStep.approverEmails[0] 
+            : firstStep.approverEmail || null;
+
+        console.log("🔹 Next approver:", nextApprover);
+
+        if (!nextApprover) {
+            console.error("❌ First approver email is missing. Step details:", firstStep);
+            throw new Error("First approver email is missing.");
+        }
+
+        // ✅ Assign the first approver
+        await KaizenIdea.updateOne(
+            { registrationNumber },
+            { $set: { currentApprover: nextApprover, status: "Pending Approval" } }
+        );
+
+        console.log("✅ Assigned first approver:", nextApprover);
+
+        // ✅ Send Approval Email Only (No submission email to the suggester)
+        await sendApprovalEmail(nextApprover, kaizenData);
+        console.log("✅ Approval email sent to:", nextApprover);
+
+    } catch (error) {
+        console.error("❌ Error starting approval process:", error.message);
+    }
 };
 
-//Start the approval process
-const processApproval = async (registrationNumber, decision) => {
+
+// Start the approval process
+const processApproval = async (registrationNumber, approverEmail, decision) => {
     try {
+        console.log(`🔹 Processing approval for ${registrationNumber} by ${approverEmail}`);
+
         const kaizen = await KaizenIdea.findOne({ registrationNumber });
         if (!kaizen) throw new Error("Kaizen idea not found.");
 
@@ -50,37 +70,55 @@ const processApproval = async (registrationNumber, decision) => {
         const workflow = await getWorkflowForPlant(plantCode);
         if (!workflow) throw new Error("Workflow not found for this plant.");
 
-        // ✅ Find the current approval step based on `currentApprover`
+        // 🔍 Find the current approval step based on approverEmail
         const findStepRecursive = (steps, email) => {
             for (let step of steps) {
-                if (step.approverEmail === email) return step;
-                const childStep = findStepRecursive(step.children, email);
-                if (childStep) return childStep;
+                let approvers = Array.isArray(step.approverEmails) ? step.approverEmails : [step.approverEmail];
+
+                if (approvers.includes(email)) {
+                    return step;
+                }
+                if (step.children && step.children.length > 0) {
+                    const childStep = findStepRecursive(step.children, email);
+                    if (childStep) return childStep;
+                }
             }
             return null;
         };
 
-        const currentStep = findStepRecursive(workflow.steps, kaizen.currentApprover);
+        const currentStep = findStepRecursive(workflow.steps, approverEmail);
         if (!currentStep) {
+            console.error("🚨 Approver not found! Approver:", approverEmail);
             throw new Error("Current approver not found in the workflow.");
         }
 
         console.log("🔹 Current Step:", currentStep);
 
+        // ✅ Check if this approver already approved this step
+        const alreadyApproved = kaizen.approvalHistory.some(
+            (entry) => entry.approverEmail === approverEmail && entry.decision === "approved"
+        );
+
+        if (alreadyApproved) {
+            throw new Error("This Kaizen idea has already been approved at this step.");
+        }
+
         let updateFields = {};
         let nextApproverEmail = null;
 
         if (decision === "approved") {
-            // ✅ Find the next approver in the hierarchy
-            if (currentStep.children.length > 0) {
+            // 🔍 Find the next approver in the hierarchy
+            if (currentStep.children && currentStep.children.length > 0) {
                 const nextStep = currentStep.children[0]; // First child step
                 console.log("🔹 Next Step:", nextStep);
 
-                updateFields.currentApprover = nextStep.approverEmail;
-                nextApproverEmail = nextStep.approverEmail;
+                updateFields.currentApprover = nextStep.approverEmails ? nextStep.approverEmails[0] : nextStep.approverEmail;
+                nextApproverEmail = updateFields.currentApprover;
 
                 // ✅ Notify the next approver
-                await sendApprovalEmail(nextStep.approverEmail, kaizen);
+                if (nextApproverEmail) {
+                    await sendApprovalEmail(nextApproverEmail, kaizen);
+                }
             } else {
                 // ✅ If no more steps, mark as fully approved
                 updateFields.status = "Approved";
@@ -99,21 +137,22 @@ const processApproval = async (registrationNumber, decision) => {
         // ✅ Log approval decision in history
         await KaizenIdea.updateOne(
             { registrationNumber },
-            { $push: { approvalHistory: { approverEmail: currentStep.approverEmail, decision, timestamp: new Date() } } }
+            { $push: { approvalHistory: { approverEmail, decision, timestamp: new Date() } } }
         );
 
-        console.log(`✅ Processed approval: ${decision} by ${currentStep.approverEmail}`);
+        console.log(`✅ Processed approval: ${decision} by ${approverEmail}`);
 
         return nextApproverEmail
             ? { message: `Approval recorded. Waiting for approval from ${nextApproverEmail}` }
-            : { message: `Kaizen idea ${decision} successfully!` };
+            : { message: `Kaizen idea approved successfully!` };
 
     } catch (error) {
-        console.error("🚨 Error processing approval:", error.message);
+        console.error("❌ Error processing approval:", error.message);
         throw new Error(error.message);
     }
 };
-//Create or Update an approval workflow
+
+// Create or Update an approval workflow
 const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
     try {
         if (!steps || !Array.isArray(steps) || steps.length === 0) {
@@ -133,12 +172,12 @@ const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
                 updatedAt: new Date(),
             });
 
-            workflow.steps = steps;  // ✅ Directly store nested structure
+            workflow.steps = steps;
             workflow.version += 1;
         } else {
             workflow = new ApprovalWorkflow({ 
                 plantCode, 
-                steps,  // ✅ Directly store nested structure 
+                steps, 
                 version: 1 
             });
         }
@@ -148,7 +187,7 @@ const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
         return {
             plantCode: workflow.plantCode,
             version: workflow.version,
-            steps: workflow.steps,  // ✅ Already nested, no need to reconstruct
+            steps: workflow.steps,
             history: workflow.history,
         };
     } catch (error) {
@@ -156,17 +195,16 @@ const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
     }
 };
 
-
-//  Delete an approval workflow
+// Delete an approval workflow
 const deleteApprovalWorkflow = async (workflowId) => {
-  try {
-      const workflow = await ApprovalWorkflow.findById(workflowId);
-      if (!workflow) throw new Error("Workflow not found");
+    try {
+        const workflow = await ApprovalWorkflow.findById(workflowId);
+        if (!workflow) throw new Error("Workflow not found");
 
-      return await ApprovalWorkflow.findByIdAndDelete(workflowId);
-  } catch (error) {
-      throw new Error("Error deleting approval workflow: " + error.message);
-  }
+        return await ApprovalWorkflow.findByIdAndDelete(workflowId);
+    } catch (error) {
+        throw new Error("Error deleting approval workflow: " + error.message);
+    }
 };
 
 module.exports = {

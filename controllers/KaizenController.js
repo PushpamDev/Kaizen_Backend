@@ -2,13 +2,13 @@ const KaizenIdea = require("../models/KaizenIdea");
 const ApprovalWorkflow = require("../models/ApprovalWorkflow"); // Workflow Model
 const { startApprovalProcess } = require("./ApprovalWorkflowController"); // Approval Workflow Controller
 const { sendApprovalEmail } = require("../services/emailService"); // Email Service
-const uploadMiddleware = require("../middleware/uploadMiddleware");
 
 const createKaizenIdea = async (req, res) => {
     console.log("📩 Received Request Body:", req.body);
     console.log("📂 Uploaded Files:", req.files);
 
     try {
+        // ✅ Destructure request body safely
         const {
             suggesterName,
             employeeCode,
@@ -27,25 +27,42 @@ const createKaizenIdea = async (req, res) => {
             benefitCostRatio,
             standardization,
             horizontalDeployment,
-            beforeKaizenFiles,
-            afterKaizenFiles
+            beforeKaizenFiles = [],
+            afterKaizenFiles = []
         } = req.body;
 
-        if (!suggesterName || !employeeCode || !category) {
+        // ✅ Validate required fields
+        if (!suggesterName || !employeeCode || !category || !plantCode || !registrationNumber) {
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
-        // // ✅ Extract file paths correctly
-        // const beforeKaizenFiles = req.files?.beforeKaizenFiles
-        //     ? req.files.beforeKaizenFiles.map(file => `/uploads/${file.filename}`)
-        //     : [];
-
-        // const afterKaizenFiles = req.files?.afterKaizenFiles
-        //     ? req.files.afterKaizenFiles.map(file => `/uploads/${file.filename}`)
-        //     : [];
-
         console.log("✅ Mapped File URLs:", { beforeKaizenFiles, afterKaizenFiles });
 
+        // ✅ Prevent duplicate entries
+        const existingKaizen = await KaizenIdea.findOne({ registrationNumber });
+        if (existingKaizen) {
+            return res.status(409).json({ success: false, message: "A Kaizen idea with this registration number already exists." });
+        }
+
+        // ✅ Fetch the latest approval workflow
+        const latestWorkflow = await ApprovalWorkflow.findOne({ plantCode }).sort({ version: -1 });
+
+        if (!latestWorkflow) {
+            return res.status(400).json({ success: false, message: "No approval workflow found for this plant." });
+        }
+
+        // ✅ Get first step's approver(s)
+        const firstApprover = latestWorkflow.steps?.[0]?.approverEmail || null;
+
+        if (!firstApprover) {
+            return res.status(400).json({ success: false, message: "No approver found for the first step in the workflow." });
+        }
+
+        // ✅ Ensure files are always stored as arrays
+        const beforeKaizenFileList = Array.isArray(beforeKaizenFiles) ? beforeKaizenFiles : [beforeKaizenFiles];
+        const afterKaizenFileList = Array.isArray(afterKaizenFiles) ? afterKaizenFiles : [afterKaizenFiles];
+
+        // ✅ Create the Kaizen Idea
         const newKaizen = new KaizenIdea({
             suggesterName,
             employeeCode,
@@ -64,13 +81,13 @@ const createKaizenIdea = async (req, res) => {
             afterKaizen,
             standardization,
             horizontalDeployment,
-            beforeKaizenFiles, // ✅ Ensure these fields are saved
-            afterKaizenFiles,   // ✅ Ensure these fields are saved
+            beforeKaizenFiles: beforeKaizenFileList,
+            afterKaizenFiles: afterKaizenFileList,
             isApproved: false,
-            status: "Pending",
+            status: "Pending Approval",
             currentStage: 0,
-            currentApprover: "",
-            stages: []
+            currentApprover: firstApprover, // ✅ Assign first approver
+            workflowVersion: latestWorkflow.version // ✅ Store workflow version
         });
 
         await newKaizen.save();
@@ -78,16 +95,18 @@ const createKaizenIdea = async (req, res) => {
         // ✅ Start the approval process automatically
         await startApprovalProcess(registrationNumber, plantCode, suggesterName, newKaizen);
 
-        res.status(201).json({ success: true, message: "Kaizen idea created successfully.", kaizen: newKaizen });
+        res.status(201).json({
+            success: true,
+            message: "Kaizen idea created successfully and approval workflow started.",
+            kaizen: newKaizen
+        });
     } catch (error) {
         console.error("❌ Error creating Kaizen idea:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-
-
-// ✅ Get All Kaizen Ideas with Filtering, Sorting & Pagination
+// ✅ Fetch All Kaizen Ideas with Filters, Sorting & Pagination
 const getAllKaizenIdeas = async (req, res) => {
     try {
         const { status, category, sortBy, page = 1, limit = 10 } = req.query;
@@ -101,28 +120,15 @@ const getAllKaizenIdeas = async (req, res) => {
         const pageLimit = Number(limit) || 10;
 
         const ideas = await KaizenIdea.find(filter)
-            .select(
-                "suggesterName employeeCode plantCode implementerName implementerCode implementationDate date registrationNumber category problemStatement description beforeKaizen afterKaizen beforeKaizenFiles afterKaizenFiles benefits implementationCost benefitCostRatio standardization horizontalDeployment status createdAt"
-            )
             .sort(sortOption)
             .skip((pageNumber - 1) * pageLimit)
             .limit(pageLimit)
             .lean();
 
-        // Construct full URLs for file paths
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
-        const formattedIdeas = ideas.map(idea => ({
-            ...idea,
-            beforeKaizenFiles: idea.beforeKaizenFiles?.map(file => `${file}`) || [],
-            afterKaizenFiles: idea.afterKaizenFiles?.map(file => `${file}`) || [],
-        }));
-
-        const totalIdeas = await KaizenIdea.countDocuments(filter);
-
         res.status(200).json({
             success: true,
-            ideas: formattedIdeas,
-            totalPages: Math.ceil(totalIdeas / pageLimit),
+            ideas,
+            totalPages: Math.ceil(await KaizenIdea.countDocuments(filter) / pageLimit),
             currentPage: pageNumber,
         });
     } catch (error) {
@@ -131,42 +137,25 @@ const getAllKaizenIdeas = async (req, res) => {
     }
 };
 
-
 const getKaizenIdeaByRegistrationNumber = async (req, res) => {
     try {
         const { registrationNumber } = req.query;
-
         if (!registrationNumber) {
             return res.status(400).json({ success: false, message: "Registration number is required" });
         }
 
         const idea = await KaizenIdea.findOne({ registrationNumber }).lean();
-
         if (!idea) {
             return res.status(404).json({ success: false, message: "Kaizen idea not found" });
         }
 
-        // Construct full URLs for file paths
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
-        const formattedIdea = {
-            ...idea,
-            beforeKaizenFiles: idea.beforeKaizenFiles?.map(file => `${file}`) || [],
-            afterKaizenFiles: idea.afterKaizenFiles?.map(file => `${file}`) || [],
-        };
-
-        console.log("🔗 Formatted File URLs:", formattedIdea.beforeKaizenFiles, formattedIdea.afterKaizenFiles);
-
-        res.status(200).json({ success: true, idea: formattedIdea });
+        res.status(200).json({ success: true, idea });
     } catch (error) {
         console.error("❌ Server Error:", error.stack);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-
-
-
-// ✅ Update Kaizen Idea
 const updateKaizenIdea = async (req, res) => {
     try {
         const updatedIdea = await KaizenIdea.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -179,7 +168,6 @@ const updateKaizenIdea = async (req, res) => {
     }
 };
 
-// ✅ Delete Kaizen Idea
 const deleteKaizenIdea = async (req, res) => {
     try {
         const deletedIdea = await KaizenIdea.findByIdAndDelete(req.params.id);
@@ -195,10 +183,8 @@ const deleteKaizenIdea = async (req, res) => {
 // 📌 Fetch Kaizen ideas by status
 const getIdeasByStatus = async (req, res) => {
     try {
-        const { status } = req.query; // Get status from query params
-        if (!status) {
-            return res.status(400).json({ message: "Status parameter is required." });
-        }
+        const { status } = req.query;
+        if (!status) return res.status(400).json({ message: "Status parameter is required." });
 
         const validStatuses = ["Approved", "Pending Approval", "Rejected"];
         if (!validStatuses.includes(status)) {
@@ -219,5 +205,4 @@ module.exports = {
     updateKaizenIdea,
     deleteKaizenIdea,
     getIdeasByStatus
-    
 };

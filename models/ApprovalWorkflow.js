@@ -5,7 +5,8 @@ const ApprovalStepSchema = new mongoose.Schema({
     role: { type: String, required: true },
     approverEmail: { type: String, required: true },
     decisionPoint: { type: String, enum: ["approve", "reject", null], default: null },
-    children: [this] // **Recursive reference to create a nested structure**
+    children: [{ type: mongoose.Schema.Types.Mixed, default: [] }]
+
 });
 
 const ApprovalWorkflowSchema = new mongoose.Schema({

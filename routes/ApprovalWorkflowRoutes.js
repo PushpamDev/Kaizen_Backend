@@ -22,17 +22,22 @@ router.get("/:plantCode", async (req, res) => {
 
 router.post("/approve/:registrationNumber", async (req, res) => {
   try {
-    const { decision } = req.body;
+    const { approverEmail, decision } = req.body; // ✅ Extract approverEmail
     const { registrationNumber } = req.params;
 
-    // ✅ Process approval
-    const responseMessage = await processApproval(registrationNumber, decision);
-    
+    if (!approverEmail) {
+      return res.status(400).json({ message: "Approver email is required." });
+    }
+
+    // ✅ Pass approverEmail to processApproval
+    const responseMessage = await processApproval(registrationNumber, approverEmail, decision);
+
     res.status(200).json(responseMessage);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
+
 
 
 // 📌 Create a new approval workflow for a plant
