@@ -109,13 +109,28 @@ const createKaizenIdea = async (req, res) => {
 // ✅ Fetch All Kaizen Ideas with Filters, Sorting & Pagination
 const getAllKaizenIdeas = async (req, res) => {
     try {
-        const { status, category, sortBy, page = 1, limit = 10 } = req.query;
+        const { status, category, startDate, endDate, sortBy, page = 1, limit = 10 } = req.query;
 
         const filter = {};
+
+        // ✅ Filter by status
         if (status) filter.status = status;
+
+        // ✅ Filter by category
         if (category) filter.category = category;
 
+        // ✅ Filter by date range
+        if (startDate && endDate) {
+            filter.date = { 
+                $gte: new Date(startDate), 
+                $lte: new Date(endDate) 
+            };
+        }
+
+        // ✅ Sorting
         const sortOption = sortBy ? { [sortBy]: 1 } : { createdAt: -1 };
+
+        // ✅ Pagination
         const pageNumber = Number(page) || 1;
         const pageLimit = Number(limit) || 10;
 
@@ -136,6 +151,7 @@ const getAllKaizenIdeas = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
 
 const getKaizenIdeaByRegistrationNumber = async (req, res) => {
     try {
