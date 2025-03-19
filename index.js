@@ -11,20 +11,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-// Ensure Mongo URI is available in environment variables
+// Ensure Mongo URI is available
 if (!process.env.MONGO_URI) {
   console.error("❌ Mongo URI not found in environment variables");
   process.exit(1);
 }
 
-console.log("🔎 MongoDB Connection: Attempting to connect...");
+console.log("🔎 Connecting to MongoDB...");
 
 // Connect to MongoDB
 mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => {
     console.error("❌ MongoDB Connection Error:", err.message);
@@ -39,17 +36,19 @@ const uploadRoutes = require("./routes/fileUploadRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const employeeVerificationRoutes = require("./routes/employeeVerificationRoutes");
 const approvalWorkflowRoutes = require("./routes/ApprovalWorkflowRoutes");
+
 // Serve Static Files (Uploaded Files)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // API Routes
-app.use("/api/kaizen", kaizenRoutes); // Fetch Kaizen by registration number
+app.use("/api/kaizen", kaizenRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/status", employeeVerificationRoutes);
 app.use("/api/approval-workflow", approvalWorkflowRoutes);
+
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error("🔥 Server Error:", err.message);

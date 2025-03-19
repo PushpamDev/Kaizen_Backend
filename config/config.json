@@ -102,5 +102,9 @@
     "1054": {
         "apiUrl": "http://fr.thirdeye-ai.com/face/getFaceInfo3",
         "frGroupName": "NMPL SSC CHK"
+    },
+    "2071":{
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getFaceInfo3",
+        "frGroupName": "N7 MSR"
     }
 }
