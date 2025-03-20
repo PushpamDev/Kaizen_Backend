@@ -13,29 +13,24 @@ router.post("/register", async (req, res) => {
     try {
         const { name, email, password, role } = req.body;
 
-        // ✅ Validate input
         if (!name || !email || !password || !role) {
             return res.status(400).json({ success: false, message: "All fields are required." });
         }
 
-        // ✅ Normalize role to lowercase and validate
         const normalizedRole = role.toLowerCase();
         if (!allowedRoles.includes(normalizedRole)) {
             return res.status(400).json({ success: false, message: "Invalid role provided." });
         }
 
-        // ✅ Check if user exists
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ success: false, message: "User already exists." });
         }
 
-        // ✅ Hash password & create user
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = new User({ name, email, password: hashedPassword, role: normalizedRole });
         await newUser.save();
 
-        // ✅ Generate JWT token
         const token = generateToken(newUser);
 
         res.status(201).json({
@@ -50,10 +45,10 @@ router.post("/register", async (req, res) => {
     }
 });
 
-// ✅ Get All Users (Only admins & super admins can access)
+// ✅ Get All Users (Only admins & super admins)
 router.get("/users", authMiddleware, checkPermission("readAny", "profile"), async (req, res) => {
     try {
-        const users = await User.find().select("-password"); // Exclude password field
+        const users = await User.find().select("-password");
         res.json({ success: true, users });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
@@ -66,13 +61,11 @@ router.put("/update-role/:id", authMiddleware, checkPermission("updateAny", "pro
         const { role } = req.body;
         const { id } = req.params;
 
-        // ✅ Normalize role to lowercase and validate
         const normalizedRole = role.toLowerCase();
         if (!allowedRoles.includes(normalizedRole)) {
             return res.status(400).json({ success: false, message: "Invalid role provided." });
         }
 
-        // ✅ Prevent super admin from being downgraded unless another exists
         const userToUpdate = await User.findById(id);
         if (!userToUpdate) return res.status(404).json({ success: false, message: "User not found" });
 
@@ -83,37 +76,33 @@ router.put("/update-role/:id", authMiddleware, checkPermission("updateAny", "pro
             }
         }
 
-        // ✅ Update user role
         const updatedUser = await User.findByIdAndUpdate(id, { role: normalizedRole }, { new: true }).select("-password");
 
         res.json({ success: true, message: "User role updated successfully", user: updatedUser });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
+});
 
-    // ✅ Login Route (Authenticate User)
+// ✅ Login Route (Authenticate User) 🚀 **MOVED OUTSIDE**
 router.post("/login", async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // ✅ Validate input
         if (!email || !password) {
             return res.status(400).json({ success: false, message: "Email and password are required." });
         }
 
-        // ✅ Check if user exists
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(400).json({ success: false, message: "Invalid email or password." });
         }
 
-        // ✅ Compare password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ success: false, message: "Invalid email or password." });
         }
 
-        // ✅ Generate JWT token
         const token = generateToken(user);
 
         res.json({
@@ -126,8 +115,6 @@ router.post("/login", async (req, res) => {
         console.error("🚨 Server Error:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
-});
-
 });
 
 module.exports = router;

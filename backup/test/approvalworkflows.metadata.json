@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"plantCode":{"$numberInt":"1"}},"name":"plantCode_1","background":true,"unique":true}],"uuid":"1449aa99088b47bd87390a38b02f004b","collectionName":"approvalworkflows","type":"collection"}

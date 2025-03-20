@@ -2,12 +2,12 @@ const AccessControl = require("accesscontrol");
 
 const ac = new AccessControl();
 
-ac.grant("normal_user")  // Match role names with JWT
+ac.grant("user")  // Match role names with JWT
     .readOwn("profile")
     .createOwn("form");
 
 ac.grant("approver")
-    .extend("normal_user")
+    .extend("user")
     .updateAny("kaizen")
     .readAny("kaizen");
 
