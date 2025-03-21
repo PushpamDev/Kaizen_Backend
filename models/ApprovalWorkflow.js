@@ -3,10 +3,12 @@ const mongoose = require("mongoose");
 const ApprovalStepSchema = new mongoose.Schema({
     stepId: { type: String, required: true }, // Unique identifier for step
     role: { type: String, required: true },
-    approverEmail: { type: String, required: true },
-    decisionPoint: { type: String, enum: ["approve", "reject", null], default: null },
+    approverEmails: [{ type: String, required: true }], // Allow multiple approvers
+    decisionPoints: [{ 
+        email: { type: String, required: true },
+        decision: { type: String, enum: ["approve", "reject", null], default: null }
+    }], // Track decisions per approver
     children: [{ type: mongoose.Schema.Types.Mixed, default: [] }]
-
 });
 
 const ApprovalWorkflowSchema = new mongoose.Schema({

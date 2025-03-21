@@ -51,7 +51,8 @@ const createKaizenIdea = async (req, res) => {
         }
 
         // ✅ Get first stage approvers
-        const firstApprovers = latestWorkflow.steps?.[0]?.approverEmail || [];
+        const firstApprovers = latestWorkflow.steps?.[0]?.approverEmails || [];
+
         if (!firstApprovers.length) {
             return res.status(400).json({ success: false, message: "No approvers assigned for the first step." });
         }

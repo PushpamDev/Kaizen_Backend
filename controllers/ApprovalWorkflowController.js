@@ -5,54 +5,66 @@ const mongoose = require("mongoose");
 
 // Fetch the latest workflow for a specific plant
 const getWorkflowForPlant = async (plantCode) => {
-    return await ApprovalWorkflow.findOne({ plantCode }).sort({ version: -1 }).lean();
+    const workflow = await ApprovalWorkflow.findOne({ plantCode }).sort({ version: -1 }).lean();
+    console.log("📝 Retrieved Workflow from DB:", JSON.stringify(workflow, null, 2));
+    return workflow;
 };
 
 const startApprovalProcess = async (registrationNumber, plantCode, kaizenData) => {
     try {
         console.log("🔹 Starting approval process for:", { registrationNumber, plantCode });
 
+        // Fetch workflow for the given plant
         const workflow = await getWorkflowForPlant(plantCode);
-        console.log("🔹 Retrieved workflow:", workflow);
 
-        if (!workflow) throw new Error("No workflow found for this plant.");
-
-        let firstStep = workflow.steps.find((step) => !step.parentStepId);
-        console.log("🔹 First step found:", firstStep);
-
-        if (!firstStep) throw new Error("Workflow is incorrectly configured.");
-
-        // ✅ Fix: Handle both `approverEmails` (array) and `approverEmail` (single string)
-        let nextApprover = Array.isArray(firstStep.approverEmails) 
-            ? firstStep.approverEmails[0] 
-            : firstStep.approverEmail || null;
-
-        console.log("🔹 Next approver:", nextApprover);
-
-        if (!nextApprover) {
-            console.error("❌ First approver email is missing. Step details:", firstStep);
-            throw new Error("First approver email is missing.");
+        if (!workflow || !workflow.steps || workflow.steps.length === 0) {
+            console.error("🚨 No workflow found or steps missing!");
+            throw new Error("No workflow found for this plant or steps are missing.");
         }
 
-        // ✅ Assign the first approver
+        // ✅ Find first step explicitly
+        const firstStep = workflow.steps.find((step) => step.stepId === "1") || workflow.steps[0];
+        console.log("🔍 Extracted First Step:", JSON.stringify(firstStep, null, 2));
+
+        if (!firstStep) {
+            console.error("🚨 First step not found in workflow!");
+            throw new Error("Workflow is incorrectly configured. First step not found.");
+        }
+
+        // ✅ Check if approvers exist
+        if (!Array.isArray(firstStep.approverEmails)) {
+            console.error("🚨 approverEmails is NOT an array!", firstStep.approverEmails);
+        }
+
+        const nextApprovers = (firstStep.approverEmails || []).map(email => email.trim()).filter(email => email.length > 0);
+        console.log("📧 Approvers in First Step:", nextApprovers);
+
+        if (nextApprovers.length === 0) {
+            console.error("🚨 No approvers found for the first step!");
+            throw new Error("No approvers assigned for the first step.");
+        }
+
+        // ✅ Assign first step approvers
         await KaizenIdea.updateOne(
             { registrationNumber },
-            { $set: { currentApprover: nextApprover, status: "Pending Approval" } }
+            { $set: { currentApprovers: nextApprovers, status: "Pending Approval" } }
         );
 
-        console.log("✅ Assigned first approver:", nextApprover);
+        console.log("✅ First step approvers assigned:", nextApprovers);
 
-        // ✅ Send Approval Email Only (No submission email to the suggester)
-        await sendApprovalEmail(nextApprover, kaizenData);
-        console.log("✅ Approval email sent to:", nextApprover);
+        // ✅ Send approval emails
+        await Promise.all(nextApprovers.map(email => sendApprovalEmail(email, kaizenData)));
+
+        console.log("✅ Approval emails sent to:", nextApprovers);
 
     } catch (error) {
-        console.error("❌ Error starting approval process:", error.message);
+        console.error("❌ Error in startApprovalProcess:", error.message);
+        throw new Error(error.message);
     }
 };
 
 
-// Start the approval process
+// Process approval from any of the assigned approvers
 const processApproval = async (registrationNumber, approverEmail, decision) => {
     try {
         console.log(`🔹 Processing approval for ${registrationNumber} by ${approverEmail}`);
@@ -60,9 +72,7 @@ const processApproval = async (registrationNumber, approverEmail, decision) => {
         const kaizen = await KaizenIdea.findOne({ registrationNumber });
         if (!kaizen) throw new Error("Kaizen idea not found.");
 
-        if (kaizen.status === "Rejected") {
-            throw new Error("This Kaizen idea has already been rejected.");
-        }
+        if (kaizen.status === "Rejected") throw new Error("This Kaizen idea has already been rejected.");
 
         const plantCode = kaizen.plantCode;
         if (!plantCode) throw new Error("Plant code is missing from Kaizen Idea.");
@@ -70,14 +80,10 @@ const processApproval = async (registrationNumber, approverEmail, decision) => {
         const workflow = await getWorkflowForPlant(plantCode);
         if (!workflow) throw new Error("Workflow not found for this plant.");
 
-        // 🔍 Find the current approval step based on approverEmail
+        // Find the current step where the approver exists
         const findStepRecursive = (steps, email) => {
             for (let step of steps) {
-                let approvers = Array.isArray(step.approverEmails) ? step.approverEmails : [step.approverEmail];
-
-                if (approvers.includes(email)) {
-                    return step;
-                }
+                if (step.approverEmails.includes(email)) return step;
                 if (step.children && step.children.length > 0) {
                     const childStep = findStepRecursive(step.children, email);
                     if (childStep) return childStep;
@@ -87,64 +93,57 @@ const processApproval = async (registrationNumber, approverEmail, decision) => {
         };
 
         const currentStep = findStepRecursive(workflow.steps, approverEmail);
-        if (!currentStep) {
-            console.error("🚨 Approver not found! Approver:", approverEmail);
-            throw new Error("Current approver not found in the workflow.");
-        }
+        if (!currentStep) throw new Error("Current approver not found in the workflow.");
 
         console.log("🔹 Current Step:", currentStep);
 
-        // ✅ Check if this approver already approved this step
-        const alreadyApproved = kaizen.approvalHistory.some(
-            (entry) => entry.approverEmail === approverEmail && entry.decision === "approved"
+        // Check if this approver already approved/rejected
+        const alreadyDecided = kaizen.approvalHistory.some(
+            (entry) => entry.approverEmail === approverEmail
         );
 
-        if (alreadyApproved) {
-            throw new Error("This Kaizen idea has already been approved at this step.");
-        }
+        if (alreadyDecided) throw new Error("This approver has already submitted a decision for this step.");
 
         let updateFields = {};
-        let nextApproverEmail = null;
 
-        if (decision === "approved") {
-            // 🔍 Find the next approver in the hierarchy
-            if (currentStep.children && currentStep.children.length > 0) {
-                const nextStep = currentStep.children[0]; // First child step
-                console.log("🔹 Next Step:", nextStep);
-
-                updateFields.currentApprover = nextStep.approverEmails ? nextStep.approverEmails[0] : nextStep.approverEmail;
-                nextApproverEmail = updateFields.currentApprover;
-
-                // ✅ Notify the next approver
-                if (nextApproverEmail) {
-                    await sendApprovalEmail(nextApproverEmail, kaizen);
-                }
-            } else {
-                // ✅ If no more steps, mark as fully approved
-                updateFields.status = "Approved";
-                updateFields.isApproved = true;
-                updateFields.currentApprover = null;
-            }
-        } else if (decision === "rejected") {
+        if (decision === "rejected") {
             updateFields.status = "Rejected";
             updateFields.isApproved = false;
-            updateFields.currentApprover = null;
+            updateFields.currentApprovers = [];
+        } else if (decision === "approved") {
+            // Remove this approver from the list of pending approvers
+            const remainingApprovers = kaizen.currentApprovers.filter(email => email !== approverEmail);
+
+            if (remainingApprovers.length === 0) {
+                // If all approvers at this step approved, move to the next step
+                if (currentStep.children && currentStep.children.length > 0) {
+                    const nextStep = currentStep.children[0]; // Move to the first child step
+                    updateFields.currentApprovers = nextStep.approverEmails;
+                    await Promise.all(nextStep.approverEmails.map((email) => sendApprovalEmail(email, kaizen)));
+                } else {
+                    // If no more steps, mark as fully approved
+                    updateFields.status = "Approved";
+                    updateFields.isApproved = true;
+                    updateFields.currentApprovers = [];
+                }
+            } else {
+                // More approvers are left in this step
+                updateFields.currentApprovers = remainingApprovers;
+            }
         }
 
-        // ✅ Update Kaizen Idea with new approval status
+        // Update Kaizen Idea with the new approval status
         await KaizenIdea.updateOne({ registrationNumber }, { $set: updateFields });
 
-        // ✅ Log approval decision in history
+        // Log the approval decision in history
         await KaizenIdea.updateOne(
             { registrationNumber },
             { $push: { approvalHistory: { approverEmail, decision, timestamp: new Date() } } }
         );
 
-        console.log(`✅ Processed approval: ${decision} by ${approverEmail}`);
+        console.log(`✅ Approval recorded: ${decision} by ${approverEmail}`);
 
-        return nextApproverEmail
-            ? { message: `Approval recorded. Waiting for approval from ${nextApproverEmail}` }
-            : { message: `Kaizen idea approved successfully!` };
+        return { message: `Approval recorded. ${decision === "approved" ? "Next step in progress." : "Kaizen idea rejected."}` };
 
     } catch (error) {
         console.error("❌ Error processing approval:", error.message);
@@ -152,7 +151,7 @@ const processApproval = async (registrationNumber, approverEmail, decision) => {
     }
 };
 
-// Create or Update an approval workflow
+// Create or Update an approval workflow, allowing multiple approvers per step
 const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
     try {
         if (!steps || !Array.isArray(steps) || steps.length === 0) {
