@@ -1,11 +1,19 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
-const User = require("../models/UserModel");
+const { User } = require("../models/UserModel"); // ✅ Fix the import
 const { generateToken } = require("../utils/jwt");
 const authMiddleware = require("../middleware/authMiddleware");
 const checkPermission = require("../middleware/checkPermissions");
 
 const router = express.Router();
+
+// ✅ Define role-based permissions
+const rolePermissions = {
+    "super admin": ["assign_admin", "assign_approver", "manage_all", "approve_kaizen", "reject_kaizen"],
+    "admin": ["assign_approver", "approve_kaizen", "reject_kaizen"],
+    "approver": ["approve_kaizen", "reject_kaizen"],
+    "user": ["submit_kaizen", "view_kaizen_form"]
+};
 
 // ✅ Allowed Roles (Ensure consistency)
 const allowedRoles = ["super admin", "admin", "approver", "user"];
@@ -73,7 +81,9 @@ router.put("/update-role/:id", authMiddleware, checkPermission("updateAny", "pro
         }
 
         const userToUpdate = await User.findById(id);
-        if (!userToUpdate) return res.status(404).json({ success: false, message: "User not found." });
+        if (!userToUpdate) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
 
         // Prevent removing the last super admin
         if (userToUpdate.role === "super admin" && normalizedRole !== "super admin") {
@@ -83,12 +93,14 @@ router.put("/update-role/:id", authMiddleware, checkPermission("updateAny", "pro
             }
         }
 
+        // ✅ Assign new role and permissions
         userToUpdate.role = normalizedRole;
         userToUpdate.permissions = rolePermissions[normalizedRole] || [];
         await userToUpdate.save();
 
         res.json({ success: true, message: "User role updated successfully", user: userToUpdate });
     } catch (error) {
+        console.error("🚨 Error in updateUserRole:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 });

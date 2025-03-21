@@ -1,8 +1,14 @@
 const bcrypt = require("bcryptjs");
 const { generateToken } = require("../utils/jwt");
-const User = require("../models/UserModel");
-const { rolePermissions } = require("../models/UserModel"); // ✅ Corrected import
+const { User } = require("../models/UserModel");
 
+// ✅ Ensure rolePermissions is properly defined here
+const rolePermissions = {
+    "super admin": ["assign_admin", "assign_approver", "manage_all", "approve_kaizen", "reject_kaizen"],
+    "admin": ["assign_approver", "approve_kaizen", "reject_kaizen"],
+    "approver": ["approve_kaizen", "reject_kaizen"],
+    "user": ["submit_kaizen", "view_kaizen_form"]
+};
 
 // ✅ Register User (with Plant Code)
 const registerUser = async (req, res) => {
@@ -12,6 +18,11 @@ const registerUser = async (req, res) => {
         // Check if all fields are provided
         if (!name || !email || !password || !role || !plantCode) {
             return res.status(400).json({ success: false, message: "All fields including plantCode are required" });
+        }
+
+        // Validate role
+        if (!rolePermissions[role]) {
+            return res.status(400).json({ success: false, message: "Invalid role" });
         }
 
         // Check if user already exists for the given email & plantCode
@@ -32,6 +43,7 @@ const registerUser = async (req, res) => {
 
         res.status(201).json({ success: true, message: "User registered successfully", token });
     } catch (error) {
+        console.error("🚨 Error in registerUser:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
@@ -63,6 +75,7 @@ const loginUser = async (req, res) => {
 
         res.json({ success: true, message: "Login successful", token });
     } catch (error) {
+        console.error("🚨 Error in loginUser:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
@@ -77,25 +90,24 @@ const updateUserRole = async (req, res) => {
             return res.status(400).json({ success: false, message: "Role is required" });
         }
 
+        if (!rolePermissions[role]) {
+            return res.status(400).json({ success: false, message: "Invalid role" });
+        }
+
         const user = await User.findById(id);
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
-        // Ensure the role exists
-        if (!rolePermissions[role]) {
-            return res.status(400).json({ success: false, message: "Invalid role provided" });
-        }
-
         user.role = role;
-        user.permissions = rolePermissions[role]; // Now it works correctly ✅
+        user.permissions = rolePermissions[role]; // ✅ Set permissions correctly
         await user.save();
 
         res.json({ success: true, message: "User role updated successfully", user });
     } catch (error) {
+        console.error("🚨 Error in updateUserRole:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
-
 
 module.exports = { registerUser, loginUser, updateUserRole };

@@ -17,7 +17,7 @@ ac.grant("admin")
     .updateAny("profile")
     .createAny("approver");
 
-ac.grant("super_admin")
+ac.grant("super admin")
     .extend("admin")
     .createAny("admin")
     .deleteAny("profile");
