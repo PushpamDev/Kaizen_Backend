@@ -106,5 +106,9 @@
     "2071":{
         "apiUrl": "http://fr.thirdeye-ai.com/face/getFaceInfo3",
         "frGroupName": "N7 MSR"
+    },
+    "2021":{
+        "apiUrl": "http://fr.thirdeye-ai.com/face/getFaceInfo3",
+        "frGroupName": "N4 GGM"
     }
 }
