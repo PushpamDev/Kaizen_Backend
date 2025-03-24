@@ -2,7 +2,7 @@ const KaizenIdea = require("../models/KaizenIdea");
 const ApprovalWorkflow = require("../models/ApprovalWorkflow");
 const { startApprovalProcess } = require("./ApprovalWorkflowController");
 
-// ✅ Create Kaizen Idea with validation and optimized workflow handling
+//  Create Kaizen Idea with validation and optimized workflow handling
 const createKaizenIdea = async (req, res) => {
     try {
         console.log("📩 Received Request:", req.body);
@@ -30,38 +30,38 @@ const createKaizenIdea = async (req, res) => {
             afterKaizenFiles = []
         } = req.body;
 
-        // ✅ Convert registrationNumber to lowercase for case-insensitive uniqueness
+        // Convert registrationNumber to lowercase for case-insensitive uniqueness
         const normalizedRegNum = registrationNumber.trim().toLowerCase();
 
-        // ✅ Validate required fields
+        //  Validate required fields
         if (!suggesterName || !employeeCode || !category || !plantCode || !normalizedRegNum) {
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
-        // ✅ Prevent duplicate entries
+        //  Prevent duplicate entries
         const existingKaizen = await KaizenIdea.findOne({ registrationNumber: normalizedRegNum });
         if (existingKaizen) {
             return res.status(409).json({ success: false, message: "Kaizen idea with this registration number already exists." });
         }
 
-        // ✅ Fetch latest workflow for the plant
+        //  Fetch latest workflow for the plant
         const latestWorkflow = await ApprovalWorkflow.findOne({ plantCode }).sort({ version: -1 });
         if (!latestWorkflow) {
             return res.status(400).json({ success: false, message: "No approval workflow found for this plant." });
         }
 
-        // ✅ Get first stage approvers
+        //  Get first stage approvers
         const firstApprovers = latestWorkflow.steps?.[0]?.approverEmails || [];
 
         if (!firstApprovers.length) {
             return res.status(400).json({ success: false, message: "No approvers assigned for the first step." });
         }
 
-        // ✅ Ensure file paths are stored as arrays
+        //  Ensure file paths are stored as arrays
         const beforeKaizenFileList = Array.isArray(beforeKaizenFiles) ? beforeKaizenFiles : [beforeKaizenFiles];
         const afterKaizenFileList = Array.isArray(afterKaizenFiles) ? afterKaizenFiles : [afterKaizenFiles];
 
-        // ✅ Create the new Kaizen idea
+        //  Create the new Kaizen idea
         const newKaizen = new KaizenIdea({
             suggesterName,
             employeeCode,
@@ -69,7 +69,7 @@ const createKaizenIdea = async (req, res) => {
             implementerName,
             implementerCode,
             implementationDate,
-            registrationNumber: normalizedRegNum, // ✅ Store in lowercase
+            registrationNumber: normalizedRegNum, //  Store in lowercase
             description,
             category,
             problemStatement,
@@ -86,13 +86,13 @@ const createKaizenIdea = async (req, res) => {
             isApproved: false,
             status: "Pending Approval",
             currentStage: 0,
-            currentApprovers: firstApprovers, // ✅ Store as an array
+            currentApprovers: firstApprovers, //  Store as an array
             workflowVersion: latestWorkflow.version
         });
 
         await newKaizen.save();
 
-        // ✅ Start the approval process
+        //  Start the approval process
         await startApprovalProcess(normalizedRegNum, plantCode, suggesterName, newKaizen);
 
         res.status(201).json({
@@ -101,12 +101,12 @@ const createKaizenIdea = async (req, res) => {
             kaizen: newKaizen
         });
     } catch (error) {
-        console.error("❌ Error creating Kaizen idea:", error);
+        console.error(" Error creating Kaizen idea:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-// ✅ Fetch all Kaizen Ideas with optimized filters, sorting & pagination
+//  Fetch all Kaizen Ideas with optimized filters, sorting & pagination
 const getAllKaizenIdeas = async (req, res) => {
     try {
         const { status, category, startDate, endDate, sortBy = "createdAt", page = 1, limit = 10 } = req.query;
@@ -115,7 +115,7 @@ const getAllKaizenIdeas = async (req, res) => {
         if (status) filter.status = status;
         if (category) filter.category = new RegExp(category, "i"); // ✅ Case-insensitive search
 
-        // ✅ Validate date filters
+        // Validate date filters
         if (startDate || endDate) {
             const start = startDate ? new Date(startDate) : new Date("1970-01-01");
             const end = endDate ? new Date(endDate) : new Date();
@@ -125,12 +125,12 @@ const getAllKaizenIdeas = async (req, res) => {
             filter.date = { $gte: start, $lte: end };
         }
 
-        // ✅ Sorting & Pagination
+        //  Sorting & Pagination
         const pageNumber = Math.max(1, Number(page));
         const pageLimit = Math.max(1, Number(limit));
         const sortOption = { [sortBy]: -1 };
 
-        // ✅ Fetch paginated data and total count separately for performance
+        //  Fetch paginated data and total count separately for performance
         const [ideas, totalCount] = await Promise.all([
             KaizenIdea.find(filter).sort(sortOption).skip((pageNumber - 1) * pageLimit).limit(pageLimit).lean(),
             KaizenIdea.countDocuments(filter)
@@ -144,12 +144,12 @@ const getAllKaizenIdeas = async (req, res) => {
             totalCount
         });
     } catch (error) {
-        console.error("❌ Error fetching Kaizen ideas:", error);
+        console.error(" Error fetching Kaizen ideas:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-// ✅ Get Kaizen Idea by Registration Number (case-insensitive)
+//  Get Kaizen Idea by Registration Number (case-insensitive)
 const getKaizenIdeaByRegistrationNumber = async (req, res) => {
     try {
         const { registrationNumber } = req.query;
@@ -165,7 +165,7 @@ const getKaizenIdeaByRegistrationNumber = async (req, res) => {
 
         res.status(200).json({ success: true, idea });
     } catch (error) {
-        console.error("❌ Server Error:", error);
+        console.error(" Server Error:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
@@ -177,7 +177,7 @@ const updateKaizenIdea = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Kaizen idea updated successfully", updatedIdea });
     } catch (error) {
-        console.error("❌ Error updating Kaizen idea:", error);
+        console.error("Error updating Kaizen idea:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
@@ -189,12 +189,12 @@ const deleteKaizenIdea = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Kaizen idea deleted successfully" });
     } catch (error) {
-        console.error("❌ Error deleting Kaizen idea:", error);
+        console.error(" Error deleting Kaizen idea:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
 
-// 📌 Fetch Kaizen ideas by status
+//  Fetch Kaizen ideas by status
 const getIdeasByStatus = async (req, res) => {
     try {
         const { status } = req.query;
