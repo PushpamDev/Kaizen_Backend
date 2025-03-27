@@ -1,6 +1,15 @@
 const jwt = require("jsonwebtoken");
-const { User, rolePermissions } = require("../models/UserModel");
+const { User } = require("../models/UserModel");
 
+// ✅ Role-based Permissions
+const rolePermissions = {
+    "super admin": ["assign_admin", "assign_approver", "manage_all", "approve_kaizen", "reject_kaizen"],
+    "admin": ["assign_approver", "approve_kaizen", "reject_kaizen"],
+    "approver": ["approve_kaizen", "reject_kaizen"],
+    "user": ["submit_kaizen", "view_kaizen_form"]
+};
+
+// ✅ Authentication Middleware
 const authMiddleware = async (req, res, next) => {
     try {
         const authHeader = req.header("Authorization");
@@ -35,8 +44,9 @@ const authMiddleware = async (req, res, next) => {
             return res.status(403).json({ success: false, message: "Access Denied. No Plant Code assigned." });
         }
 
-        console.log("✅ User authenticated:", user.email);
-        req.user = user; // Attach user info to request
+        // Attach user info to request
+        req.user = user;
+        console.log(`✅ User authenticated: ${user.email} | Role: ${user.role}`);
         next();
     } catch (error) {
         console.error("❌ JWT Error:", error);
@@ -48,4 +58,16 @@ const authMiddleware = async (req, res, next) => {
     }
 };
 
-module.exports = authMiddleware;
+// ✅ Authorization Middleware for Role-based Access Control
+const authorizeRoles = (...allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user || !allowedRoles.includes(req.user.role)) {
+            console.log(`❌ Access Denied for User: ${req.user ? req.user.email : "Unknown"}`);
+            return res.status(403).json({ success: false, message: "Access Denied. Insufficient permissions." });
+        }
+        console.log(`✅ Access Granted to: ${req.user.email} | Role: ${req.user.role}`);
+        next();
+    };
+};
+
+module.exports = { authMiddleware, authorizeRoles };

@@ -23,9 +23,20 @@ const setupApp = async () => {
             process.exit(1);
         });
 
-    // Middleware
+    // ✅ AdminJS setup (must be BEFORE body-parser)
+    try {
+        const { adminJs, adminRouter } = await import("./admin.mjs");
+        app.use(adminJs.options.rootPath, adminRouter);
+        console.log(`✅ AdminJS Ready at ${adminJs.options.rootPath}`);
+    } catch (err) {
+        console.error("❌ AdminJS Load Error:", err.message);
+    }
+
+    // ✅ Move body-parser AFTER AdminJS
     app.use(bodyParser.json());
     app.use(bodyParser.urlencoded({ extended: true }));
+
+    // ✅ Other middleware
     app.use(cors());
     app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -52,15 +63,6 @@ const setupApp = async () => {
         console.error("🔥 Server Error:", err.message);
         res.status(500).json({ success: false, message: "Internal Server Error" });
     });
-
-    // AdminJS setup (optional for tests)
-    try {
-        const { adminJs, adminRouter } = await import("./admin.mjs");
-        app.use(adminJs.options.rootPath, adminRouter);
-        console.log(`✅ AdminJS Ready at ${adminJs.options.rootPath}`);
-    } catch (err) {
-        console.error("❌ AdminJS Load Error:", err.message);
-    }
 
     return app;
 };

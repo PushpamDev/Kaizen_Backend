@@ -88,4 +88,5 @@ const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
     session(sessionOptions)
 );
 
+// ✅ Ensure adminRouter is ready before exporting
 export { adminJs, adminRouter };

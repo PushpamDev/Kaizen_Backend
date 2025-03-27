@@ -1,24 +1,15 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
-const { User } = require("../models/UserModel"); // ✅ Fix the import
+const { User } = require("../models/UserModel");
 const { generateToken } = require("../utils/jwt");
-const authMiddleware = require("../middleware/authMiddleware");
-const checkPermission = require("../middleware/checkPermissions");
+const { authMiddleware, authorizeRoles } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// ✅ Define role-based permissions
-const rolePermissions = {
-    "super admin": ["assign_admin", "assign_approver", "manage_all", "approve_kaizen", "reject_kaizen"],
-    "admin": ["assign_approver", "approve_kaizen", "reject_kaizen"],
-    "approver": ["approve_kaizen", "reject_kaizen"],
-    "user": ["submit_kaizen", "view_kaizen_form"]
-};
-
-// ✅ Allowed Roles (Ensure consistency)
+// Allowed Roles
 const allowedRoles = ["super admin", "admin", "approver", "user"];
 
-// ✅ Register User (with Plant Code)
+// Register User (with Plant Code)
 router.post("/register", async (req, res) => {
     try {
         const { name, email, password, role, plantCode } = req.body;
@@ -55,8 +46,8 @@ router.post("/register", async (req, res) => {
     }
 });
 
-// ✅ Get All Users (Only admins & super admins)
-router.get("/users", authMiddleware, checkPermission("readAny", "profile"), async (req, res) => {
+// Get All Users (Only admins & super admins)
+router.get("/users", authMiddleware, authorizeRoles("admin", "super admin"), async (req, res) => {
     try {
         const users = await User.find().select("-password");
         res.json({ success: true, users });
@@ -65,8 +56,8 @@ router.get("/users", authMiddleware, checkPermission("readAny", "profile"), asyn
     }
 });
 
-// ✅ Update User Role (Only super admins & admins)
-router.put("/update-role/:id", authMiddleware, checkPermission("updateAny", "profile"), async (req, res) => {
+//  Update User Role (Only super admins & admins)
+router.put("/update-role/:id", authMiddleware, authorizeRoles("admin", "super admin"), async (req, res) => {
     try {
         const { role } = req.body;
         const { id } = req.params;
@@ -93,9 +84,7 @@ router.put("/update-role/:id", authMiddleware, checkPermission("updateAny", "pro
             }
         }
 
-        // ✅ Assign new role and permissions
         userToUpdate.role = normalizedRole;
-        userToUpdate.permissions = rolePermissions[normalizedRole] || [];
         await userToUpdate.save();
 
         res.json({ success: true, message: "User role updated successfully", user: userToUpdate });
@@ -105,7 +94,37 @@ router.put("/update-role/:id", authMiddleware, checkPermission("updateAny", "pro
     }
 });
 
-// ✅ Login User (with Plant Code)
+//  Update User Name & Password
+router.put("/update-user/:id", authMiddleware, async (req, res) => {
+    try {
+        const { name, password } = req.body;
+        const { id } = req.params;
+
+        if (!name && !password) {
+            return res.status(400).json({ success: false, message: "Provide name or password to update." });
+        }
+
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        if (name) user.name = name;
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            user.password = hashedPassword;
+        }
+
+        await user.save();
+
+        res.json({ success: true, message: "User details updated successfully", user });
+    } catch (error) {
+        console.error("🚨 Error in updateUser:", error);
+        res.status(500).json({ success: false, message: "Server error", error: error.message });
+    }
+});
+
+//  Login User (with Plant Code)
 router.post("/login", async (req, res) => {
     try {
         const { email, password, plantCode } = req.body;

@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const { generateToken } = require("../utils/jwt");
 const { User } = require("../models/UserModel");
 
-// ✅ Ensure rolePermissions is properly defined here
+// ✅ Role-based Permissions
 const rolePermissions = {
     "super admin": ["assign_admin", "assign_approver", "manage_all", "approve_kaizen", "reject_kaizen"],
     "admin": ["assign_approver", "approve_kaizen", "reject_kaizen"],
@@ -15,33 +15,27 @@ const registerUser = async (req, res) => {
     try {
         const { name, email, password, role, plantCode } = req.body;
 
-        // Check if all fields are provided
         if (!name || !email || !password || !role || !plantCode) {
             return res.status(400).json({ success: false, message: "All fields including plantCode are required" });
         }
 
-        // Validate role
         if (!rolePermissions[role]) {
             return res.status(400).json({ success: false, message: "Invalid role" });
         }
 
-        // Check if user already exists for the given email & plantCode
         let user = await User.findOne({ email, plantCode });
         if (user) {
             return res.status(400).json({ success: false, message: "User already exists for this Plant Code" });
         }
 
-        // Hash password before saving
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create new user
         user = new User({ name, email, password: hashedPassword, role, plantCode, permissions: rolePermissions[role] });
         await user.save();
 
-        // Generate token
         const token = generateToken(user);
 
-        res.status(201).json({ success: true, message: "User registered successfully", token });
+        res.status(201).json({ success: true, message: "User registered successfully", token, user });
     } catch (error) {
         console.error("🚨 Error in registerUser:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
@@ -53,27 +47,23 @@ const loginUser = async (req, res) => {
     try {
         const { email, password, plantCode } = req.body;
 
-        // Check if all fields are provided
         if (!email || !password || !plantCode) {
             return res.status(400).json({ success: false, message: "Email, password, and plantCode are required" });
         }
 
-        // Find user by email and Plant Code
         const user = await User.findOne({ email, plantCode });
         if (!user) {
             return res.status(400).json({ success: false, message: "Invalid credentials" });
         }
 
-        // Validate password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ success: false, message: "Invalid credentials" });
         }
 
-        // Generate token
         const token = generateToken(user);
 
-        res.json({ success: true, message: "Login successful", token });
+        res.json({ success: true, message: "Login successful", token, user });
     } catch (error) {
         console.error("🚨 Error in loginUser:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
@@ -99,8 +89,16 @@ const updateUserRole = async (req, res) => {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
+        // 🚨 Prevent removing the last super admin
+        if (user.role === "super admin") {
+            const superAdminCount = await User.countDocuments({ role: "super admin" });
+            if (superAdminCount === 1) {
+                return res.status(403).json({ success: false, message: "Cannot remove the last super admin." });
+            }
+        }
+
         user.role = role;
-        user.permissions = rolePermissions[role]; // ✅ Set permissions correctly
+        user.permissions = rolePermissions[role];
         await user.save();
 
         res.json({ success: true, message: "User role updated successfully", user });
@@ -110,4 +108,36 @@ const updateUserRole = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, loginUser, updateUserRole };
+// ✅ Update User Name and Password
+const updateUserDetails = async (req, res) => {
+    try {
+        const { name, password } = req.body;
+        const { id } = req.params;
+
+        if (!name && !password) {
+            return res.status(400).json({ success: false, message: "At least one field (name or password) is required" });
+        }
+
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        if (name) {
+            user.name = name;
+        }
+
+        if (password) {
+            user.password = await bcrypt.hash(password, 10);
+        }
+
+        await user.save();
+
+        res.json({ success: true, message: "User details updated successfully", user });
+    } catch (error) {
+        console.error("🚨 Error in updateUserDetails:", error);
+        res.status(500).json({ success: false, message: "Server error", error: error.message });
+    }
+};
+
+module.exports = { registerUser, loginUser, updateUserRole, updateUserDetails };
