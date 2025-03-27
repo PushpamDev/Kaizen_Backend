@@ -13,6 +13,7 @@ const rolePermissions = {
 const authMiddleware = async (req, res, next) => {
     try {
         const authHeader = req.header("Authorization");
+        console.log("🔍 Authorization Header:", authHeader);
 
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
             console.log("❌ No token provided or invalid format.");
@@ -20,34 +21,27 @@ const authMiddleware = async (req, res, next) => {
         }
 
         const token = authHeader.split(" ")[1]; // Extract token
-        console.log("🔍 Extracted Token:", token);
+        console.log("🔑 Extracted Token:", token);
 
-        // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        console.log("✅ Decoded Token:", decoded);
+        console.log("📜 Decoded Token:", decoded);
 
         if (!decoded || !decoded.id || !decoded.plantCode) {
-            console.log("❌ Invalid token payload.");
             return res.status(401).json({ success: false, message: "Invalid token." });
         }
 
         // Fetch user and exclude password
         const user = await User.findById(decoded.id).select("-password");
         if (!user) {
-            console.log("❌ User not found with ID:", decoded.id);
             return res.status(401).json({ success: false, message: "User not found." });
         }
 
-        // Attach user info and plantCode to request
+        // Attach user and plantCode to request
         req.user = { ...user._doc, plantCode: decoded.plantCode };
-        console.log(`✅ User authenticated: ${user.email} | Role: ${user.role} | Plant Code: ${user.plantCode}`);
+        console.log("✅ User Authenticated:", req.user.email, "| Plant Code:", req.user.plantCode);
         next();
     } catch (error) {
-        console.error("❌ JWT Error:", error);
-
-        if (error.name === "TokenExpiredError") {
-            return res.status(401).json({ success: false, message: "Token expired. Please log in again." });
-        }
+        console.error("🚨 Authentication Error:", error.message);
         return res.status(403).json({ success: false, message: "Invalid or expired token." });
     }
 };
@@ -66,20 +60,11 @@ const authorizeRoles = (...allowedRoles) => {
 
 // ✅ Middleware to enforce plant-specific data filtering
 const enforcePlantCode = async (req, res, next) => {
-    try {
-        if (!req.user || !req.user.plantCode) {
-            console.log("❌ No plantCode found for user:", req.user ? req.user.email : "Unknown");
-            return res.status(403).json({ success: false, message: "Access Denied. Plant Code is required." });
-        }
-
-        // Attach plantCode to request for filtering in controllers
-        req.plantCode = req.user.plantCode;
-        console.log(`🔍 Enforcing plantCode-based filtering: ${req.plantCode}`);
-        next();
-    } catch (error) {
-        console.error("❌ Error in enforcePlantCode middleware:", error);
-        res.status(500).json({ success: false, message: "Server error", error: error.message });
+    if (!req.user || !req.user.plantCode) {
+        return res.status(403).json({ success: false, message: "Access Denied. Plant Code is required." });
     }
-};
 
+    req.plantCode = req.user.plantCode;
+    next();
+};
 module.exports = { authMiddleware, authorizeRoles, enforcePlantCode };

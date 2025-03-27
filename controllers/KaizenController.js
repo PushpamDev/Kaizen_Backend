@@ -113,11 +113,13 @@ const getAllKaizenIdeas = async (req, res) => {
     try {
         const { status, category, startDate, endDate, sortBy = "createdAt", page = 1, limit = 10 } = req.query;
 
-        const filter = {};
-        if (status) filter.status = status;
-        if (category) filter.category = new RegExp(category, "i"); // ✅ Case-insensitive search
+        // ✅ Initialize filters
+        const filter = req.user.role === "super admin" ? {} : { plantCode: req.user.plantCode };
 
-        // Validate date filters
+        if (status) filter.status = status;
+        if (category) filter.category = new RegExp(category, "i"); // ✅ Case-insensitive category search
+
+        // ✅ Date filtering
         if (startDate || endDate) {
             const start = startDate ? new Date(startDate) : new Date("1970-01-01");
             const end = endDate ? new Date(endDate) : new Date();
@@ -127,12 +129,12 @@ const getAllKaizenIdeas = async (req, res) => {
             filter.date = { $gte: start, $lte: end };
         }
 
-        // Sorting & Pagination
+        // ✅ Sorting & Pagination
         const pageNumber = Math.max(1, Number(page));
         const pageLimit = Math.max(1, Number(limit));
         const sortOption = { [sortBy]: -1 };
 
-        // Fetch paginated data and total count separately for performance
+        // ✅ Fetch paginated data & count simultaneously
         const [ideas, totalCount] = await Promise.all([
             KaizenIdea.find(filter).sort(sortOption).skip((pageNumber - 1) * pageLimit).limit(pageLimit).lean(),
             KaizenIdea.countDocuments(filter)
@@ -146,7 +148,7 @@ const getAllKaizenIdeas = async (req, res) => {
             totalCount
         });
     } catch (error) {
-        console.error(" Error fetching Kaizen ideas:", error);
+        console.error("🔥 Error fetching Kaizen ideas:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
@@ -160,18 +162,19 @@ const getKaizenIdeaByRegistrationNumber = async (req, res) => {
         }
 
         const normalizedRegNum = registrationNumber.trim().toLowerCase();
-        const idea = await KaizenIdea.findOne({ registrationNumber: normalizedRegNum }).lean();
+        const filter = req.user.role === "super admin" ? {} : { plantCode: req.user.plantCode };
+
+        const idea = await KaizenIdea.findOne({ registrationNumber: normalizedRegNum, ...filter }).lean();
         if (!idea) {
             return res.status(404).json({ success: false, message: "Kaizen idea not found" });
         }
 
         res.status(200).json({ success: true, idea });
     } catch (error) {
-        console.error(" Server Error:", error);
+        console.error("🔥 Server Error:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
-
 const updateKaizenIdea = async (req, res) => {
     try {
         const updatedIdea = await KaizenIdea.findByIdAndUpdate(req.params.id, req.body, { new: true });

@@ -12,7 +12,7 @@ const {
     getKaizenIdeaByRegistrationNumber,
     getIdeasByStatus
 } = require("../controllers/KaizenController");
-
+const { authMiddleware, enforcePlantCode } = require("../middleware/authMiddleware");
 // ✅ Middleware to parse JSON & URL-encoded data
 router.use(express.json());
 router.use(express.urlencoded({ extended: true }));
@@ -31,7 +31,7 @@ router.get("/generate-form-id", async (req, res) => {
 router.post("/create", createKaizenIdea);
 
 // ✅ List all Kaizens with pagination & filters
-router.get("/", getAllKaizenIdeas);
+router.get("/", authMiddleware, enforcePlantCode, getAllKaizenIdeas);
 router.get("/generate-and-redirect", async (req, res) => {
     try {
         const formId = uuidv4(); // Generate a new formId
@@ -45,7 +45,8 @@ router.get("/generate-and-redirect", async (req, res) => {
 });
 
 // ✅ Get a specific Kaizen by registration number
-router.get("/by-registration", getKaizenIdeaByRegistrationNumber);
+router.get("/by-registration", authMiddleware, enforcePlantCode, getKaizenIdeaByRegistrationNumber);
+
 
 // ✅ Update a specific Kaizen
 router.put("/:id", updateKaizenIdea);

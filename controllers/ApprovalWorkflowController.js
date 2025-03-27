@@ -3,31 +3,24 @@ const KaizenIdea = require("../models/KaizenIdea");
 const { sendApprovalEmail } = require("../services/emailService");
 const mongoose = require("mongoose");
 
-
-
-// Fetch the latest workflow for a specific plant
 const getWorkflowForPlant = async (plantCode) => {
     try {
-        console.log("🔍 Fetching workflow for plant:", plantCode);
-        
-        const workflows = await ApprovalWorkflow.find({ plantCode })
-            .sort({ version: -1 }) // ✅ Sort in MongoDB instead of JS
-            .limit(1) // ✅ Get the latest version directly
-            .lean(); // ✅ Ensure it returns an array of plain objects
-        
-        console.log("📝 Raw Query Result:", workflows);
-
-        return workflows.length > 0 ? workflows[0] : null; // ✅ Return first workflow if available
+      console.log("🔍 Fetching workflow for plant:", plantCode); // Debug log
+      const workflow = await ApprovalWorkflow.findOne({ plantCode }).sort({ version: -1 }).lean().exec();
+      
+      if (!workflow) {
+        console.log("⚠️ No workflow found for plant:", plantCode);
+        return null; // Ensure null is returned, not undefined
+      }
+  
+      console.log("✅ Workflow found:", workflow);
+      return workflow;
     } catch (error) {
-        console.error("❌ Error fetching workflow:", error.message);
-        throw new Error("Failed to fetch workflow.");
+      console.error("❌ Error in getWorkflowForPlant:", error);
+      throw new Error("Database query failed"); // Handle errors properly
     }
-};
-
-
-
-
-
+  };
+  
 const startApprovalProcess = async (registrationNumber, plantCode, kaizenData) => {
     try {
         console.log("🔹 Starting approval process for:", { registrationNumber, plantCode });
@@ -170,14 +163,17 @@ const processApproval = async (registrationNumber, approverEmail, decision) => {
 };
 
 // Create or Update an approval workflow, allowing multiple approvers per step
-const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
+const createApprovalWorkflow = async (req, res) => {
     try {
+        const { steps } = req.body;
+        const updatedBy = req.user.email; // Extract user email from JWT
+        const plantCode = req.user.plantCode; // Extract plantCode from JWT
+
         if (!steps || !Array.isArray(steps) || steps.length === 0) {
-            throw new Error("Approval workflow must have at least one step.");
+            return res.status(400).json({ success: false, message: "Approval workflow must have at least one step." });
         }
 
-        let workflow = await ApprovalWorkflow.findOne({ plantCode }).lean();
-
+        let workflow = await ApprovalWorkflow.findOne({ plantCode });
 
         if (workflow) {
             if (!workflow.history) workflow.history = [];
@@ -185,6 +181,7 @@ const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
             if (workflow.history.length >= 5) {
                 workflow.history.shift();
             }
+
             workflow.history.push({
                 version: workflow.version || 1,
                 changes: "Updated approval steps",
@@ -195,35 +192,32 @@ const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
             workflow.steps = steps;
             workflow.version = (workflow.version || 0) + 1;
         } else {
-            // 🔹 Ensure Mongoose instance is created properly
-            workflow = new ApprovalWorkflow({ 
-                plantCode, 
-                steps, 
+            workflow = new ApprovalWorkflow({
+                plantCode,
+                steps,
                 version: 1,
                 history: [],
             });
         }
 
-        console.log("✅ Workflow Type:", workflow.constructor.name); // Should log 'model'
-
-        if (typeof workflow.save !== "function") {
-            console.error("🚨 workflow is not a Mongoose instance:", workflow);
-            throw new Error("workflow.save is not a function");
-        }
-
         await workflow.save();
 
-        return {
-            plantCode: workflow.plantCode,
-            version: workflow.version,
-            steps: workflow.steps,
-            history: workflow.history,
-        };
+        return res.status(200).json({
+            success: true,
+            message: "Approval workflow created/updated successfully.",
+            workflow: {
+                plantCode: workflow.plantCode,
+                version: workflow.version,
+                steps: workflow.steps,
+                history: workflow.history,
+            },
+        });
     } catch (error) {
         console.error("❌ Error in createApprovalWorkflow:", error.message);
-        throw new Error("Error creating/updating approval workflow: " + error.message);
+        return res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
 
 
 

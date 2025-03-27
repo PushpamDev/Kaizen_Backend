@@ -1,5 +1,4 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const router = express.Router();
 const {
   getWorkflowForPlant,
@@ -7,52 +6,56 @@ const {
   createApprovalWorkflow,
   deleteApprovalWorkflow,
 } = require("../controllers/ApprovalWorkflowController");
+const { authMiddleware, enforcePlantCode } = require("../middleware/authMiddleware"); 
 
-// 📌 Fetch workflow for a specific plant
-router.get("/:plantCode", async (req, res) => {
-    try {
-        const workflow = await getWorkflowForPlant(req.params.plantCode);
-        if (!workflow) return res.status(404).json({ message: "No workflow found for this plant." });
-        res.json(workflow);
-    } catch (error) {
-        res.status(500).json({ message: "Error fetching workflow: " + error.message });
+// 📌 Fetch workflow for the logged-in user's plant
+router.get("/:plantCode", authMiddleware, async (req, res) => {
+  try {
+    const { plantCode } = req.params;
+    const workflow = await getWorkflowForPlant(plantCode);
+
+    if (!workflow) {
+      return res.status(404).json({ success: false, message: "No workflow found for this plant." });
     }
+
+    // 🚀 Ensure we don’t access status anywhere
+    const { status, ...workflowData } = workflow || {}; 
+
+    res.json({ success: true, workflow: workflowData });
+  } catch (error) {
+    console.error("❌ Error fetching workflow:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching workflow",
+      error: error.message || "Unknown error",
+    });
+  }
 });
 
 
-router.post("/approve/:registrationNumber", async (req, res) => {
+// 📌 Process approval decision
+router.post("/approve/:registrationNumber", authMiddleware, enforcePlantCode, async (req, res) => {
   try {
-    const { approverEmail, decision } = req.body; // ✅ Extract approverEmail
+    const { decision } = req.body;
     const { registrationNumber } = req.params;
+    const { email: approverEmail } = req.user; // 🔹 Get approver email from logged-in user
 
     if (!approverEmail) {
       return res.status(400).json({ message: "Approver email is required." });
     }
 
-    // ✅ Pass approverEmail to processApproval
     const responseMessage = await processApproval(registrationNumber, approverEmail, decision);
-
     res.status(200).json(responseMessage);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-
-
-// 📌 Create a new approval workflow for a plant
-router.post("/", async (req, res) => {
-  try {
-    const { plantCode, steps, updatedBy } = req.body;
-    const newWorkflow = await createApprovalWorkflow(plantCode, steps, updatedBy);
-    res.status(201).json(newWorkflow);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
+// 📌 Create/Update approval workflow for logged-in user's plant
+router.post("/", authMiddleware, enforcePlantCode, createApprovalWorkflow);
 
 // 📌 Delete an approval workflow
-router.delete("/delete/:workflowId", async (req, res) => {
+router.delete("/delete/:workflowId", authMiddleware, enforcePlantCode, async (req, res) => {
   try {
     await deleteApprovalWorkflow(req.params.workflowId);
     res.status(200).json({ message: "Workflow deleted successfully" });
