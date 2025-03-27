@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaizen Idea Sheet</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .checkbox-group label {
+            margin-right: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h2 style="text-align: center;">KAIZEN IDEA SHEET</h2>
+    <table>
+        <tr>
+            <td colspan="2"><b>1. Suggestor Name</b></td>
+            <td colspan="2"><b>2. Employee Code</b></td>
+        </tr>
+        <tr>
+            <td colspan="2"><%= suggesterName %></td>
+            <td colspan="2"><%= employeeCode %></td>
+        </tr>
+        <tr>
+            <td colspan="2"><b>8. Implementer Name</b></td>
+            <td colspan="2"><b>9. Employee Code</b></td>
+        </tr>
+        <tr>
+            <td colspan="2"><%= implementerName %></td>
+            <td colspan="2"><%= implementerCode %></td>
+        </tr>
+        <tr>
+            <td colspan="2"><b>10. Implementation Date</b></td>
+            <td colspan="2"><b>17. Registration No.</b></td>
+        </tr>
+        <tr>
+            <td colspan="2"><%= implementationDate %></td>
+            <td colspan="2"><%= registrationNo %></td>
+        </tr>
+        <tr>
+            <td colspan="4"><b>Categories (Tick ✓ the relevant box):</b></td>
+        </tr>
+        <tr>
+            <td colspan="4">
+                <div class="checkbox-group">
+                    <% 
+                        const categoryList = ["Safety", "Productivity", "Quality", "Energy, Environment & Health", "Cost", "Industry 4.0/Digitization"];
+                        categories = Array.isArray(categories) ? categories : [];
+                        categoryList.forEach(category => { 
+                    %>
+                        <label><%= categories.includes(category) ? "✓" : "" %> <%= category %></label>
+                    <% }) %>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2"><b>4. Before Kaizen (Sketch/Picture)</b></td>
+            <td colspan="2"><b>6. After Kaizen (Sketch/Picture)</b></td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                <% if (beforeKaizenImage) { %>
+                    <img src="data:image/png;base64,<%= beforeKaizenImage %>" alt="Before Kaizen" style="width:100%; height:100px;">
+                <% } else { %>
+                    No Image Provided
+                <% } %>
+            </td>
+            <td colspan="2">
+                <% if (afterKaizenImage) { %>
+                    <img src="data:image/png;base64,<%= afterKaizenImage %>" alt="After Kaizen" style="width:100%; height:100px;">
+                <% } else { %>
+                    No Image Provided
+                <% } %>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="4"><b>5. Problem Statement</b></td>
+        </tr>
+        <tr>
+            <td colspan="4"><%= problemStatement %></td>
+        </tr>
+        <tr>
+            <td colspan="4"><b>7. Description of Implemented Solution</b></td>
+        </tr>
+        <tr>
+            <td colspan="4"><%= solutionDescription %></td>
+        </tr>
+        <tr>
+            <td colspan="2"><b>11. Cost of Implementation (COI)</b></td>
+            <td colspan="2"><b>16. Benefit-Cost Ratio</b></td>
+        </tr>
+        <tr>
+            <td colspan="2"><%= costOfImplementation %></td>
+            <td colspan="2"><%= benefitCostRatio %></td>
+        </tr>
+        <tr>
+            <td colspan="2"><b>12. Benefits</b></td>
+            <td colspan="2"><b>14. Applicability for Horizontal Deployment</b></td>
+        </tr>
+        <tr>
+            <td colspan="2"><%= benefits %></td>
+            <td colspan="2"><%= horizontalDeployment %></td>
+        </tr>
+        <tr>
+            <td colspan="4"><b>15. Results Verification Remark</b></td>
+        </tr>
+        <tr>
+            <td colspan="4"><%= verificationRemarks %></td>
+        </tr>
+    </table>
+</body>
+</html>

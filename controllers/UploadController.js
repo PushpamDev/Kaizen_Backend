@@ -8,60 +8,72 @@ if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Allowed file types (images & PDFs)
-const allowedFileTypes = /jpeg|jpg|png|pdf/;
+// Allowed file types (images, PDFs, etc.)
+const allowedFileTypes = /jpeg|jpg|png|pdf|txt|docx|xlsx/;
 
 // Configure Multer Storage
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, uploadDir); // ✅ Save files in 'uploads/' directory
+        cb(null, uploadDir); // Save files in 'uploads/' directory
     },
     filename: function (req, file, cb) {
+        const ext = file.originalname ? path.extname(file.originalname).toLowerCase() : ".bin"; // Default extension if undefined
         const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-        cb(null, uniqueSuffix + path.extname(file.originalname).toLowerCase()); // ✅ Unique filename
+        cb(null, uniqueSuffix + ext); // Ensure filename is always set
     }
 });
+
 
 // File Filter for Validation
 const fileFilter = (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!allowedFileTypes.test(ext)) {
-        return cb(new Error("Only images (jpg, png) and PDFs are allowed!"), false);
+        return cb(new Error("Only images (jpg, png), PDFs, and other allowed file types are allowed!"), false);
     }
     cb(null, true);
 };
 
-// Multer Middleware (Limit file size to 5MB, max 10 files)
+// Multer Middleware (Limit file size to 5MB, max 10 files per field)
 const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
-}).array("files", 10); // ✅ Change 'files' to match your frontend input name
+}).fields([
+    { name: "beforeKaizenFiles", maxCount: 10 },
+    { name: "afterKaizenFiles", maxCount: 10 }
+]);
 
 // Upload File Controller
 const uploadFiles = (req, res) => {
     upload(req, res, function (err) {
         if (err instanceof multer.MulterError) {
+            if (err.code === "LIMIT_FILE_SIZE") {
+                return res.status(400).json({ success: false, message: "File too large. Max size is 5MB." });
+            }
             return res.status(400).json({ success: false, message: `Multer error: ${err.message}` });
         } else if (err) {
             return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });
         }
-        if (!req.files || req.files.length === 0) {
-            return res.status(400).json({ success: false, message: "No files uploaded" });
+
+        if (!req.files || Object.keys(req.files).length === 0) {
+            return res.status(400).json({ success: false, message: "No valid files uploaded." });
         }
 
-        // Generate full file URLs dynamically
-        const uploadedFiles = req.files.map(file => ({
-            filename: file.filename,
-            fileUrl: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`, // ✅ Full URL
-            mimetype: file.mimetype,
-            size: file.size
-        }));
+        // Correctly map files per field
+        const uploadedFiles = {};
+        Object.keys(req.files).forEach(field => {
+            uploadedFiles[field] = req.files[field].map(file => ({
+                filename: file.filename,
+                fileUrl: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`,
+                mimetype: file.mimetype,
+                size: file.size
+            }));
+        });
 
-        res.status(200).json({ 
-            success: true, 
+        res.status(200).json({
+            success: true,
             message: "Files uploaded successfully",
-            files: uploadedFiles
+            fileUrls: uploadedFiles
         });
     });
 };

@@ -43,7 +43,8 @@ const KaizenIdeaSchema = new mongoose.Schema(
     date: { type: Date, default: Date.now },
 
     // 🔹 Unique Kaizen Registration Number
-    registrationNumber: { type: String, required: true, unique: true, trim: true },
+    registrationNumber: { type: String, required: true, unique: true },
+    
 
     category: { type: String, required: true, trim: true },
     otherCategory: { type: String, trim: true, default: "" },
@@ -82,6 +83,7 @@ const KaizenIdeaSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
 
 // Middleware: Set expiration time when form is created
 KaizenIdeaSchema.pre("save", function (next) {

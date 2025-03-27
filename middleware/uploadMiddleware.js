@@ -60,10 +60,11 @@ const uploadKaizenFiles = (req, res, next) => {
             return res.status(400).json({ success: false, message: "File upload error", error: err.message });
         }
 
-        if (!req.files || (!req.files.beforeKaizenFiles && !req.files.afterKaizenFiles)) {
-            console.warn("⚠️ No files uploaded.");
+        if (!req.files || !req.files.beforeKaizenFiles && !req.files.afterKaizenFiles) {
+            console.warn("⚠️ No valid files uploaded.");
             return res.status(400).json({ success: false, message: "No valid files uploaded." });
         }
+        
 
         console.log("📂 Files Uploaded:", Object.keys(req.files).map(field => `${field}: ${req.files[field].length} files`));
         

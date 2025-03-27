@@ -3,19 +3,37 @@ const KaizenIdea = require("../models/KaizenIdea");
 const { sendApprovalEmail } = require("../services/emailService");
 const mongoose = require("mongoose");
 
+
+
 // Fetch the latest workflow for a specific plant
 const getWorkflowForPlant = async (plantCode) => {
-    const workflow = await ApprovalWorkflow.findOne({ plantCode }).sort({ version: -1 }).lean();
-    console.log("📝 Retrieved Workflow from DB:", JSON.stringify(workflow, null, 2));
-    return workflow;
+    try {
+        console.log("🔍 Fetching workflow for plant:", plantCode);
+        
+        const workflows = await ApprovalWorkflow.find({ plantCode })
+            .sort({ version: -1 }) // ✅ Sort in MongoDB instead of JS
+            .limit(1) // ✅ Get the latest version directly
+            .lean(); // ✅ Ensure it returns an array of plain objects
+        
+        console.log("📝 Raw Query Result:", workflows);
+
+        return workflows.length > 0 ? workflows[0] : null; // ✅ Return first workflow if available
+    } catch (error) {
+        console.error("❌ Error fetching workflow:", error.message);
+        throw new Error("Failed to fetch workflow.");
+    }
 };
+
+
+
+
 
 const startApprovalProcess = async (registrationNumber, plantCode, kaizenData) => {
     try {
         console.log("🔹 Starting approval process for:", { registrationNumber, plantCode });
 
-        // Fetch workflow for the given plant
         const workflow = await getWorkflowForPlant(plantCode);
+        console.log("🔍 Workflow retrieved in startApprovalProcess:", workflow);
 
         if (!workflow || !workflow.steps || workflow.steps.length === 0) {
             console.error("🚨 No workflow found or steps missing!");
@@ -158,27 +176,39 @@ const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
             throw new Error("Approval workflow must have at least one step.");
         }
 
-        let workflow = await ApprovalWorkflow.findOne({ plantCode });
+        let workflow = await ApprovalWorkflow.findOne({ plantCode }).lean();
+
 
         if (workflow) {
+            if (!workflow.history) workflow.history = [];
+
             if (workflow.history.length >= 5) {
                 workflow.history.shift();
             }
             workflow.history.push({
-                version: workflow.version,
+                version: workflow.version || 1,
                 changes: "Updated approval steps",
                 updatedBy,
                 updatedAt: new Date(),
             });
 
             workflow.steps = steps;
-            workflow.version += 1;
+            workflow.version = (workflow.version || 0) + 1;
         } else {
+            // 🔹 Ensure Mongoose instance is created properly
             workflow = new ApprovalWorkflow({ 
                 plantCode, 
                 steps, 
-                version: 1 
+                version: 1,
+                history: [],
             });
+        }
+
+        console.log("✅ Workflow Type:", workflow.constructor.name); // Should log 'model'
+
+        if (typeof workflow.save !== "function") {
+            console.error("🚨 workflow is not a Mongoose instance:", workflow);
+            throw new Error("workflow.save is not a function");
         }
 
         await workflow.save();
@@ -190,9 +220,12 @@ const createApprovalWorkflow = async (plantCode, steps, updatedBy) => {
             history: workflow.history,
         };
     } catch (error) {
+        console.error("❌ Error in createApprovalWorkflow:", error.message);
         throw new Error("Error creating/updating approval workflow: " + error.message);
     }
 };
+
+
 
 // Delete an approval workflow
 const deleteApprovalWorkflow = async (workflowId) => {
