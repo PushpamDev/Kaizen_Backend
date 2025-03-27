@@ -1,34 +1,51 @@
-import AdminJS from "adminjs";
+import AdminJS, { ComponentLoader } from "adminjs"; // ✅ Import ComponentLoader
 import AdminJSExpress from "@adminjs/express";
 import * as AdminJSMongoose from "@adminjs/mongoose"; 
-
 import express from "express";
 import session from "express-session";
-import connectMongo from "connect-mongo"; // ✅ Mongo session store
+import connectMongo from "connect-mongo";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
-
-import { User, rolePermissions } from "./models/UserModel.js"; // ✅ Import User & rolePermissions
+import { User, rolePermissions } from "./models/UserModel.js";
 import KaizenIdea from "./models/KaizenIdea.js";
 import ApprovalWorkflow from "./models/ApprovalWorkflow.js";
 import Category from "./models/CategoryModel.js";
+import OrganizationLogo from "./models/OrganizationLogo.js"; // ✅ Import OrganizationLogo Model
 
 dotenv.config();
 
 // ✅ Register Mongoose Adapter Before Importing Models
 AdminJS.registerAdapter(AdminJSMongoose);
 
-// ✅ Initialize AdminJS
+// ✅ Set up Component Loader
+const componentLoader = new ComponentLoader();
+const OrganizationLogoShow = componentLoader.add("OrganizationLogoShow", "./admin/components/OrganizationLogoShow");
+
 const adminJs = new AdminJS({
     rootPath: "/admin",
     resources: [
         {
+            resource: OrganizationLogo,
+            options: {
+                properties: {
+                    logo: {
+                        components: {
+                            show: OrganizationLogoShow, // ✅ Register the custom component
+                        },
+                    },
+                },
+            },
+        },
+        KaizenIdea,
+        ApprovalWorkflow,
+        Category,
+        {
             resource: User,
             options: {
                 properties: {
-                    password: { isVisible: false }, // Hide passwords
-                    permissions: { isVisible: { list: true, edit: true, show: true } }
+                    password: { isVisible: false },
+                    permissions: { isVisible: { list: true, edit: true, show: true } },
                 },
                 actions: {
                     edit: {
@@ -37,15 +54,13 @@ const adminJs = new AdminJS({
                                 request.payload.permissions = rolePermissions[request.payload.role] || [];
                             }
                             return request;
-                        }
-                    }
-                }
-            }
+                        },
+                    },
+                },
+            },
         },
-        KaizenIdea,
-        ApprovalWorkflow,
-        Category
     ],
+    componentLoader, // ✅ Attach component loader to AdminJS
 });
 
 // ✅ Fix Session Persistence with Mongo Store
@@ -58,25 +73,23 @@ const sessionOptions = {
     secret: process.env.ADMIN_COOKIE_SECRET || "default_secret",
     resave: false,
     saveUninitialized: false,
-    store: sessionStore, // ✅ Mongo Store for Sessions
+    store: sessionStore,
     cookie: { secure: process.env.NODE_ENV === "production" },
 };
 
-// ✅ Secure Authentication (Only Super Admins)
+// ✅ Secure Authentication
 const authenticate = async (email, password) => {
     const user = await User.findOne({ email });
 
-    if (!user) return null; // ❌ No User Found
-
+    if (!user) return null;
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) return null; // ❌ Wrong Password
+    if (!isPasswordValid) return null;
+    if (user.role !== "super admin") return null;
 
-    if (user.role !== "super admin") return null; // ❌ Block Non-Super Admins
-
-    return user; // ✅ Allow Super Admins
+    return user;
 };
 
-// ✅ Create Admin Router with Authentication
+// ✅ Create Admin Router
 const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
     adminJs,
     {
@@ -88,5 +101,4 @@ const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
     session(sessionOptions)
 );
 
-// ✅ Ensure adminRouter is ready before exporting
 export { adminJs, adminRouter };

@@ -2,14 +2,14 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const { User } = require("../models/UserModel");
 const { generateToken } = require("../utils/jwt");
-const { authMiddleware, authorizeRoles } = require("../middleware/authMiddleware");
+const { authMiddleware, authorizeRoles, enforcePlantCode } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
 // Allowed Roles
 const allowedRoles = ["super admin", "admin", "approver", "user"];
 
-// Register User (with Plant Code)
+// ✅ Register User (with Plant Code)
 router.post("/register", async (req, res) => {
     try {
         const { name, email, password, role, plantCode } = req.body;
@@ -46,18 +46,24 @@ router.post("/register", async (req, res) => {
     }
 });
 
-// Get All Users (Only admins & super admins)
-router.get("/users", authMiddleware, authorizeRoles("admin", "super admin"), async (req, res) => {
+// ✅ Get All Users (Admins see only their plant; Super Admins see all)
+router.get("/users", authMiddleware, enforcePlantCode, authorizeRoles("admin", "super admin"), async (req, res) => {
     try {
-        const users = await User.find().select("-password");
+        let users;
+        if (req.user.role === "super admin") {
+            users = await User.find().select("-password");
+        } else {
+            users = await User.find({ plantCode: req.user.plantCode }).select("-password");
+        }
+
         res.json({ success: true, users });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 });
 
-//  Update User Role (Only super admins & admins)
-router.put("/update-role/:id", authMiddleware, authorizeRoles("admin", "super admin"), async (req, res) => {
+// ✅ Update User Role (Super Admins only)
+router.put("/update-role/:id", authMiddleware, authorizeRoles("super admin"), async (req, res) => {
     try {
         const { role } = req.body;
         const { id } = req.params;
@@ -94,8 +100,8 @@ router.put("/update-role/:id", authMiddleware, authorizeRoles("admin", "super ad
     }
 });
 
-//  Update User Name & Password
-router.put("/update-user/:id", authMiddleware, async (req, res) => {
+// ✅ Update User Name & Password (Only within the same plant)
+router.put("/update-user/:id", authMiddleware, enforcePlantCode, async (req, res) => {
     try {
         const { name, password } = req.body;
         const { id } = req.params;
@@ -107,6 +113,11 @@ router.put("/update-user/:id", authMiddleware, async (req, res) => {
         const user = await User.findById(id);
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        // Ensure users can only update users within their plant
+        if (req.user.role !== "super admin" && user.plantCode !== req.user.plantCode) {
+            return res.status(403).json({ success: false, message: "Access Denied. You can only update users within your plant." });
         }
 
         if (name) user.name = name;
@@ -124,7 +135,7 @@ router.put("/update-user/:id", authMiddleware, async (req, res) => {
     }
 });
 
-//  Login User (with Plant Code)
+// ✅ Login User (with Plant Code)
 router.post("/login", async (req, res) => {
     try {
         const { email, password, plantCode } = req.body;

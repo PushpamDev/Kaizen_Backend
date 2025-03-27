@@ -26,7 +26,7 @@ const authMiddleware = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         console.log("✅ Decoded Token:", decoded);
 
-        if (!decoded || !decoded.id) {
+        if (!decoded || !decoded.id || !decoded.plantCode) {
             console.log("❌ Invalid token payload.");
             return res.status(401).json({ success: false, message: "Invalid token." });
         }
@@ -38,15 +38,9 @@ const authMiddleware = async (req, res, next) => {
             return res.status(401).json({ success: false, message: "User not found." });
         }
 
-        // Ensure user has a plantCode assigned
-        if (!user.plantCode) {
-            console.log("❌ User has no plantCode:", user.email);
-            return res.status(403).json({ success: false, message: "Access Denied. No Plant Code assigned." });
-        }
-
-        // Attach user info to request
-        req.user = user;
-        console.log(`✅ User authenticated: ${user.email} | Role: ${user.role}`);
+        // Attach user info and plantCode to request
+        req.user = { ...user._doc, plantCode: decoded.plantCode };
+        console.log(`✅ User authenticated: ${user.email} | Role: ${user.role} | Plant Code: ${user.plantCode}`);
         next();
     } catch (error) {
         console.error("❌ JWT Error:", error);
@@ -70,4 +64,22 @@ const authorizeRoles = (...allowedRoles) => {
     };
 };
 
-module.exports = { authMiddleware, authorizeRoles };
+// ✅ Middleware to enforce plant-specific data filtering
+const enforcePlantCode = async (req, res, next) => {
+    try {
+        if (!req.user || !req.user.plantCode) {
+            console.log("❌ No plantCode found for user:", req.user ? req.user.email : "Unknown");
+            return res.status(403).json({ success: false, message: "Access Denied. Plant Code is required." });
+        }
+
+        // Attach plantCode to request for filtering in controllers
+        req.plantCode = req.user.plantCode;
+        console.log(`🔍 Enforcing plantCode-based filtering: ${req.plantCode}`);
+        next();
+    } catch (error) {
+        console.error("❌ Error in enforcePlantCode middleware:", error);
+        res.status(500).json({ success: false, message: "Server error", error: error.message });
+    }
+};
+
+module.exports = { authMiddleware, authorizeRoles, enforcePlantCode };

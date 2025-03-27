@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@adminjs/bundler": "^3.0.0",
     "@adminjs/express": "^6.1.1",
     "@adminjs/mongoose": "^4.1.0",
     "accesscontrol": "^2.2.1",

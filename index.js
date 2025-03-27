@@ -48,7 +48,7 @@ const setupApp = async () => {
     const employeeRoutes = require("./routes/employeeRoutes");
     const employeeVerificationRoutes = require("./routes/employeeVerificationRoutes");
     const approvalWorkflowRoutes = require("./routes/ApprovalWorkflowRoutes");
-
+    const organizationRoutes = require("./routes/organizationRoutes");
     // Mount API Routes
     app.use("/api/kaizen", kaizenRoutes);
     app.use("/api/categories", categoryRoutes);
@@ -57,7 +57,7 @@ const setupApp = async () => {
     app.use("/api/employees", employeeRoutes);
     app.use("/api/status", employeeVerificationRoutes);
     app.use("/api/approval-workflow", approvalWorkflowRoutes);
-
+    app.use("/api/organization", organizationRoutes);
     // Global Error Handler
     app.use((err, req, res, next) => {
         console.error("🔥 Server Error:", err.message);
