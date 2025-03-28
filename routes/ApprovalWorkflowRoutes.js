@@ -34,20 +34,27 @@ router.get("/:plantCode", authMiddleware, async (req, res) => {
 
 
 // 📌 Process approval decision
-router.post("/approve/:registrationNumber", authMiddleware, enforcePlantCode, async (req, res) => {
+router.post("/action/:registrationNumber", authMiddleware, enforcePlantCode, async (req, res) => {
   try {
-    const { decision } = req.body;
-    const { registrationNumber } = req.params;
-    const { email: approverEmail } = req.user; // 🔹 Get approver email from logged-in user
+      const { decision, approverEmail } = req.body; // 🔹 Get approverEmail from request body
+      const { registrationNumber } = req.params;
 
-    if (!approverEmail) {
-      return res.status(400).json({ message: "Approver email is required." });
-    }
+      console.log("📥 Request Body:", req.body); // Debug log
 
-    const responseMessage = await processApproval(registrationNumber, approverEmail, decision);
-    res.status(200).json(responseMessage);
+      if (!approverEmail) {
+          console.error("❌ Missing approverEmail in request body");
+          return res.status(400).json({ message: "Approver email is required." });
+      }
+      if (!decision) {
+          console.error("❌ Missing decision in request body");
+          return res.status(400).json({ message: "Decision is required." });
+      }
+
+      const responseMessage = await processApproval(registrationNumber, approverEmail, decision);
+      res.status(200).json(responseMessage);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+      console.error("❌ Route Error:", error);
+      res.status(500).json({ message: error.message });
   }
 });
 

@@ -108,36 +108,51 @@ const updateUserRole = async (req, res) => {
     }
 };
 
-// ✅ Update User Name and Password
+// ✅ Update User Name and Password with Current Password Authentication
 const updateUserDetails = async (req, res) => {
     try {
-        const { name, password } = req.body;
+        const { name, password, currentPassword } = req.body;
         const { id } = req.params;
 
+        // Validate request body
+        if (!currentPassword) {
+            return res.status(400).json({ success: false, message: "Current password is required" });
+        }
         if (!name && !password) {
-            return res.status(400).json({ success: false, message: "At least one field (name or password) is required" });
+            return res.status(400).json({ success: false, message: "At least one field (name or password) is required to update" });
         }
 
+        // Find the user by ID
         const user = await User.findById(id);
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
+        // Verify current password
+        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isPasswordValid) {
+            return res.status(401).json({ success: false, message: "Current password is incorrect" });
+        }
+
+        // Update fields if provided
         if (name) {
             user.name = name;
+            console.log(`🔄 Updating name to: ${name}`);
         }
 
         if (password) {
             user.password = await bcrypt.hash(password, 10);
+            console.log("🔄 Password updated");
         }
 
+        // Save the updated user
         await user.save();
 
-        res.json({ success: true, message: "User details updated successfully", user });
+        console.log(`✅ User ${id} details updated successfully`);
+        res.json({ success: true, message: "User details updated successfully", user: { id: user._id, name: user.name, email: user.email } });
     } catch (error) {
         console.error("🚨 Error in updateUserDetails:", error);
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
-
 module.exports = { registerUser, loginUser, updateUserRole, updateUserDetails };

@@ -77,8 +77,7 @@ const startApprovalProcess = async (registrationNumber, plantCode, kaizenData) =
     }
 };
 
-
-// Process approval from any of the assigned approvers
+// Process approval where one approval moves to the next step
 const processApproval = async (registrationNumber, approverEmail, decision) => {
     try {
         console.log(`🔹 Processing approval for ${registrationNumber} by ${approverEmail}`);
@@ -89,6 +88,12 @@ const processApproval = async (registrationNumber, approverEmail, decision) => {
             console.error("❌ Error: Kaizen idea not found for registration number:", registrationNumber);
             throw new Error("Kaizen idea not found.");
         }
+
+        console.log("📋 Kaizen Document:", {
+            currentStage: kaizen.currentStage,
+            currentApprovers: kaizen.currentApprovers,
+            status: kaizen.status
+        });
 
         if (kaizen.status === "Rejected") {
             console.error("❌ Error: Kaizen idea is already rejected.");
@@ -107,91 +112,122 @@ const processApproval = async (registrationNumber, approverEmail, decision) => {
             throw new Error("Workflow not found for this plant.");
         }
 
-        // Recursive function to find the approver in the workflow steps
-        const findStepRecursive = (steps, email) => {
-            for (let step of steps) {
-                if (step.approverEmails.includes(email)) return step;
+        // Find the current step based on kaizen.currentStage
+        const findStepByStage = (steps, stage, currentDepth = 0) => {
+            for (let i = 0; i < steps.length; i++) {
+                const step = steps[i];
+                const currentStage = currentDepth + i;
+                if (currentStage === stage) {
+                    return { step, stage: currentStage };
+                }
                 if (step.children && step.children.length > 0) {
-                    const childStep = findStepRecursive(step.children, email);
-                    if (childStep) return childStep;
+                    const childResult = findStepByStage(step.children, stage, currentDepth + 1);
+                    if (childResult) return childResult;
                 }
             }
             return null;
         };
 
-        const currentStep = findStepRecursive(workflow.steps, approverEmail);
-        if (!currentStep) {
-            console.error("❌ Error: Approver not found in the workflow.");
-            throw new Error("Current approver not found in the workflow.");
+        const currentStage = kaizen.currentStage || 0; // Default to 0 if not set
+        const stepResult = findStepByStage(workflow.steps, currentStage);
+        if (!stepResult) {
+            console.error("❌ Error: No step found for stage", currentStage, "in workflow.");
+            throw new Error("Current step not found in workflow.");
         }
 
-        console.log("🔹 Current Step:", currentStep);
+        const { step: currentStep } = stepResult;
+        console.log("🔹 Current Step from Workflow:", {
+            stage: currentStage,
+            approvers: currentStep.approverEmails
+        });
 
-        // Check if this approver has already approved/rejected
+        // Validate approver is in current step
+        if (!currentStep.approverEmails.includes(approverEmail)) {
+            console.error("❌ Error: Approver", approverEmail, "not assigned to stage", currentStage);
+            throw new Error("You are not an approver for the current step.");
+        }
+
+        // Check if this approver has already decided for THIS STEP
         const alreadyDecided = kaizen.approvalHistory.some(
-            (entry) => entry.approverEmail === approverEmail
+            (entry) => entry.approverEmail === approverEmail && entry.stage === currentStage
         );
 
         if (alreadyDecided) {
-            console.error("❌ Error: Duplicate approval attempt by", approverEmail);
+            console.error("❌ Error: Duplicate approval attempt by", approverEmail, "at stage", currentStage);
             throw new Error("This approver has already submitted a decision for this step.");
         }
 
         let updateFields = {};
 
         if (decision === "rejected") {
-            console.log(`🔻 ${approverEmail} rejected the Kaizen idea.`);
+            console.log(`🔻 ${approverEmail} rejected the Kaizen idea at stage ${currentStage}`);
             updateFields.status = "Rejected";
             updateFields.isApproved = false;
             updateFields.currentApprovers = [];
+            updateFields.currentStage = currentStage;
         } else if (decision === "approved") {
-            console.log(`✅ ${approverEmail} approved the Kaizen idea.`);
+            console.log(`✅ ${approverEmail} approved the Kaizen idea at stage ${currentStage}`);
 
-            // Remove approver from current approvers
-            const remainingApprovers = kaizen.currentApprovers.filter(email => email !== approverEmail);
+            // Move to the next step immediately upon approval
+            if (currentStep.children && currentStep.children.length > 0) {
+                const nextStep = currentStep.children[0];
+                updateFields.currentApprovers = nextStep.approverEmails;
+                updateFields.currentStage = currentStage + 1;
 
-            if (remainingApprovers.length === 0) {
-                // Move to the next step
-                if (currentStep.children && currentStep.children.length > 0) {
-                    const nextStep = currentStep.children[0]; // Move to the first child step
-                    updateFields.currentApprovers = nextStep.approverEmails;
-                    
-                    console.log("🔄 Moving to next step with approvers:", nextStep.approverEmails);
-                    
-                    // Send email to next approvers
-                    await Promise.all(nextStep.approverEmails.map((email) => sendApprovalEmail(email, kaizen)));
-                } else {
-                    // No more steps, mark as fully approved
-                    console.log(`🏆 Kaizen ${registrationNumber} fully approved.`);
-                    updateFields.status = "Approved";
-                    updateFields.isApproved = true;
-                    updateFields.currentApprovers = [];
-                }
+                console.log("🔄 Moving to next step (stage", currentStage + 1, ") with approvers:", nextStep.approverEmails);
+
+                // Send email to next approvers
+                await Promise.all(nextStep.approverEmails.map((email) => sendApprovalEmail(email, kaizen)));
             } else {
-                console.log("🔹 Waiting for more approvals. Remaining approvers:", remainingApprovers);
-                updateFields.currentApprovers = remainingApprovers;
+                // No more steps, mark as fully approved
+                console.log(`🏆 Kaizen ${registrationNumber} fully approved.`);
+                updateFields.status = "Approved";
+                updateFields.isApproved = true;
+                updateFields.currentApprovers = [];
+                updateFields.currentStage = currentStage;
             }
         }
 
         // Update Kaizen Idea with the new approval status
-        await KaizenIdea.updateOne({ registrationNumber }, { $set: updateFields });
-
-        // Log approval in history
         await KaizenIdea.updateOne(
             { registrationNumber },
-            { $push: { approvalHistory: { approverEmail, decision, timestamp: new Date() } } }
+            { $set: updateFields }
         );
 
-        console.log(`✅ Approval recorded: ${decision} by ${approverEmail}`);
-        return { message: `Approval recorded. ${decision === "approved" ? "Next step in progress." : "Kaizen idea rejected."}` };
+        // Log approval in history with stage
+        await KaizenIdea.updateOne(
+            { registrationNumber },
+            {
+                $push: {
+                    approvalHistory: {
+                        approverEmail,
+                        decision,
+                        stage: currentStage,
+                        timestamp: new Date()
+                    }
+                }
+            }
+        );
 
+        console.log(`✅ Approval recorded: ${decision} by ${approverEmail} at stage ${currentStage}`);
+
+        let message;
+        if (decision === "rejected") {
+            message = "Kaizen idea rejected.";
+        } else if (decision === "approved") {
+            if (currentStep.children && currentStep.children.length > 0) {
+                message = "Approval recorded. Moved to next step.";
+            } else {
+                message = "Kaizen idea fully approved.";
+            }
+        }
+
+        return { success: true, message };
     } catch (error) {
         console.error("❌ Error processing approval:", error);
         return { success: false, error: error.message };
     }
 };
-
-
 // Create or Update an approval workflow, allowing multiple approvers per step
 const createApprovalWorkflow = async (req, res) => {
     try {

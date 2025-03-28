@@ -4,8 +4,27 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path");
 const bodyParser = require("body-parser");
+const jwt = require("jsonwebtoken"); // Add JWT for authentication
 
 const app = express();
+
+// Authentication Middleware
+const authMiddleware = (req, res, next) => {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+        console.warn("⚠️ No token provided in request");
+        return res.status(401).json({ success: false, message: "No token provided" });
+    }
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+        req.user = decoded;
+        console.log("✅ Token verified, user:", decoded);
+        next();
+    } catch (error) {
+        console.error("❌ Invalid token:", error.message);
+        return res.status(401).json({ success: false, message: "Invalid token" });
+    }
+};
 
 // Function to set up the app
 const setupApp = async () => {
@@ -23,7 +42,7 @@ const setupApp = async () => {
             process.exit(1);
         });
 
-    // ✅ AdminJS setup (must be BEFORE body-parser)
+    // AdminJS setup (must be BEFORE body-parser)
     try {
         const { adminJs, adminRouter } = await import("./admin.mjs");
         app.use(adminJs.options.rootPath, adminRouter);
@@ -32,13 +51,14 @@ const setupApp = async () => {
         console.error("❌ AdminJS Load Error:", err.message);
     }
 
-    // ✅ Move body-parser AFTER AdminJS
+    // Move body-parser AFTER AdminJS
     app.use(bodyParser.json());
     app.use(bodyParser.urlencoded({ extended: true }));
 
-    // ✅ Other middleware
+    // Other middleware
     app.use(cors());
     app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 
     // Import API Routes
     const kaizenRoutes = require("./routes/kaizenRoutes");
@@ -49,15 +69,17 @@ const setupApp = async () => {
     const employeeVerificationRoutes = require("./routes/employeeVerificationRoutes");
     const approvalWorkflowRoutes = require("./routes/ApprovalWorkflowRoutes");
     const organizationRoutes = require("./routes/organizationRoutes");
-    // Mount API Routes
-    app.use("/api/kaizen", kaizenRoutes);
-    app.use("/api/categories", categoryRoutes);
-    app.use("/api/auth", authRoutes);
+
+    // Mount API Routes with authMiddleware where needed
+    app.use("/api/kaizen",kaizenRoutes);
+    app.use("/api/categories",categoryRoutes);
+    app.use("/api/auth", authRoutes, authMiddleware); 
     app.use("/api/upload", uploadRoutes);
     app.use("/api/employees", employeeRoutes);
-    app.use("/api/status", employeeVerificationRoutes);
-    app.use("/api/approval-workflow", approvalWorkflowRoutes);
-    app.use("/api/organization", organizationRoutes);
+    app.use("/api/status", authMiddleware, employeeVerificationRoutes);
+    app.use("/api/approval-workflow", authMiddleware, approvalWorkflowRoutes);
+    app.use("/api/organization", authMiddleware, organizationRoutes);
+
     // Global Error Handler
     app.use((err, req, res, next) => {
         console.error("🔥 Server Error:", err.message);
@@ -75,5 +97,5 @@ if (process.env.NODE_ENV !== "test") {
     });
 }
 
-module.exports = setupApp; // Export the setup function
-module.exports.app = app; // Export app for testing purposes
+module.exports = setupApp;
+module.exports.app = app;

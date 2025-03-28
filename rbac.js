@@ -10,13 +10,14 @@ ac.grant("approver")
     .extend("user")
     .updateAny("kaizen")
     .readAny("kaizen");
-
-ac.grant("admin")
+    
+    ac.grant("admin")
     .extend("approver")
-    .readAny("profile")  // <-- Add this line to allow admin to read profiles
+    .readAny("profile")
     .updateAny("profile")
-    .createAny("approver");
-
+    .createAny("approver")
+    .updateAny("uploadSettings");
+    
 ac.grant("super admin")
     .extend("admin")
     .createAny("admin")
