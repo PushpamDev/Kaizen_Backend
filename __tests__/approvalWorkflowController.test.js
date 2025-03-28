@@ -1,17 +1,17 @@
 const mongoose = require("mongoose");
-const { 
+const {
     getWorkflowForPlant,
     startApprovalProcess,
     processApproval,
     createApprovalWorkflow,
-    deleteApprovalWorkflow 
+    deleteApprovalWorkflow
 } = require("../controllers/ApprovalWorkflowController");
 
 const ApprovalWorkflow = require("../models/ApprovalWorkflow");
 const KaizenIdea = require("../models/KaizenIdea");
 const { sendApprovalEmail } = require("../services/emailService");
 
-// 🛑 Mock Dependencies
+// Mock Dependencies
 jest.mock("../models/ApprovalWorkflow");
 jest.mock("../models/KaizenIdea");
 jest.mock("../services/emailService");
@@ -19,37 +19,37 @@ jest.mock("../services/emailService");
 describe("Approval Workflow Controller", () => {
     beforeEach(() => {
         jest.clearAllMocks();
-    
-        ApprovalWorkflow.find.mockReturnValue({
-            sort: jest.fn().mockReturnThis(),
-            limit: jest.fn().mockReturnThis(),
-            lean: jest.fn().mockResolvedValue([
-                { plantCode: "1022", version: 3, steps: [{ stepId: "1", approverEmails: ["approver@example.com"] }] }
-            ]) // ✅ Return an array with a valid workflow
-        });
+        jest.spyOn(console, "log").mockImplementation(() => {}); // Suppress logs
+        jest.spyOn(console, "error").mockImplementation(() => {}); // Suppress errors
     });
-    
 
     test("getWorkflowForPlant should return the latest workflow for a given plant", async () => {
         const mockWorkflow = { plantCode: "1022", version: 3 };
 
         ApprovalWorkflow.find.mockReturnValue({
             sort: jest.fn().mockReturnThis(),
-            limit: jest.fn().mockReturnThis(),
-            lean: jest.fn().mockResolvedValueOnce([mockWorkflow]) // ✅ Ensures it's an array
+            limit: jest.fn().mockResolvedValueOnce([mockWorkflow]), // Returning an array
         });
+        
 
         const result = await getWorkflowForPlant("1022");
 
         expect(result).toEqual(mockWorkflow);
-        expect(ApprovalWorkflow.find).toHaveBeenCalledWith({ plantCode: "1022" }); // ✅ Fixed from findOne to find
+        expect(ApprovalWorkflow.find).toHaveBeenCalledWith({ plantCode: "1022" });
     });
 
-    // 🔹 Test startApprovalProcess
     test("startApprovalProcess should assign approvers and send emails", async () => {
-        const mockWorkflow = { steps: [{ stepId: "1", approverEmails: ["approver@example.com"] }] };
-        ApprovalWorkflow.findOne.mockResolvedValueOnce(mockWorkflow);
+        const mockWorkflow = {
+            steps: [{ stepId: "1", approverEmails: ["approver@example.com"] }]
+        };
+
+        ApprovalWorkflow.find.mockReturnValue({
+            sort: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockResolvedValueOnce([mockWorkflow]), // Returning an array
+        });
+        
         KaizenIdea.updateOne.mockResolvedValueOnce({});
+        sendApprovalEmail.mockResolvedValueOnce(true);
 
         await startApprovalProcess("KAIZEN123", "1022", { someData: "test" });
 
@@ -61,61 +61,100 @@ describe("Approval Workflow Controller", () => {
         expect(sendApprovalEmail).toHaveBeenCalledWith("approver@example.com", { someData: "test" });
     });
 
-    // 🔹 Test processApproval
-    test("processApproval should update approval status", async () => {
+    test("processApproval should update approval status and handle recursive steps", async () => {
         const mockKaizen = {
             registrationNumber: "KAIZEN123",
             plantCode: "1022",
             currentApprovers: ["approver@example.com"],
             approvalHistory: []
         };
-        const mockWorkflow = { steps: [{ approverEmails: ["approver@example.com"] }] };
+        const mockWorkflow = {
+            steps: [
+                {
+                    approverEmails: ["approver@example.com"],
+                    children: [{ approverEmails: ["nextApprover@example.com"] }]
+                }
+            ]
+        };
 
         KaizenIdea.findOne.mockResolvedValueOnce(mockKaizen);
-        ApprovalWorkflow.findOne.mockResolvedValueOnce(mockWorkflow);
+        ApprovalWorkflow.find.mockReturnValue({
+            sort: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockResolvedValueOnce([mockWorkflow]), // Returning an array
+        });
+        
         KaizenIdea.updateOne.mockResolvedValueOnce({});
+        sendApprovalEmail.mockResolvedValueOnce(true);
 
         await processApproval("KAIZEN123", "approver@example.com", "approved");
 
         expect(KaizenIdea.updateOne).toHaveBeenCalled();
+        expect(sendApprovalEmail).toHaveBeenCalledWith("nextApprover@example.com", expect.any(Object));
     });
 
-    // 🔹 Test createApprovalWorkflow
-    test("createApprovalWorkflow should create a new workflow", async () => {
+    test("processApproval should reject a Kaizen idea", async () => {
+        const mockKaizen = {
+            registrationNumber: "KAIZEN123",
+            plantCode: "1022",
+            currentApprovers: ["approver@example.com"],
+            approvalHistory: []
+        };
+        const mockWorkflow = {
+            steps: [{ approverEmails: ["approver@example.com"] }]
+        };
+
+        KaizenIdea.findOne.mockResolvedValueOnce(mockKaizen);
+        ApprovalWorkflow.find.mockReturnValue({
+            sort: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockResolvedValueOnce([mockWorkflow]), // Returning an array
+        });
+        
+        KaizenIdea.updateOne.mockResolvedValueOnce({});
+
+        await processApproval("KAIZEN123", "approver@example.com", "rejected");
+
+        expect(KaizenIdea.updateOne).toHaveBeenCalledWith(
+            { registrationNumber: "KAIZEN123" },
+            { $set: { status: "Rejected", isApproved: false, currentApprovers: [] } }
+        );
+    });
+
+    test("createApprovalWorkflow should create or update a workflow", async () => {
         const validSteps = [{ stepId: "1", approverEmails: ["approver@example.com"] }];
-    
-        // ✅ Mock `ApprovalWorkflow.findOne` to return `null` with a proper `.lean()` function
-        ApprovalWorkflow.findOne = jest.fn().mockReturnValue({
-            lean: jest.fn().mockResolvedValue(null), // ✅ Ensures `.lean()` exists
-        });
-    
-        // ✅ Mock `save` function properly
-        const mockSaveFunction = jest.fn().mockResolvedValue(true);
-    
-        // ✅ Ensure `new ApprovalWorkflow()` returns a real Mongoose instance
-        ApprovalWorkflow.mockImplementation((data) => {
-            return {
-                ...data,
-                save: mockSaveFunction,  // ✅ Attach `save()` method
-            };
-        });
-    
-        // Call the function
-        const result = await createApprovalWorkflow("1022", validSteps, "admin");
-    
-        // Assertions
-        expect(result.plantCode).toBe("1022");
-        expect(result.steps.length).toBeGreaterThan(0);
-        expect(mockSaveFunction).toHaveBeenCalled(); // ✅ Ensure save() was called
-    });
-    
-    
-    
-    
-    
-    
+        const mockRequest = {
+            user: { email: "admin@example.com", plantCode: "1022" },
+            body: { steps: validSteps }
+        };
+        const mockResponse = {
+            status: jest.fn().mockReturnThis(),
+            json: jest.fn()
+        };
 
-    // 🔹 Test deleteApprovalWorkflow
+        const mockWorkflow = {
+            plantCode: "1022",
+            version: 1,
+            steps: validSteps,
+            history: [],
+            save: jest.fn().mockResolvedValue(true)
+        };
+
+        ApprovalWorkflow.find.mockReturnValue({
+            sort: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockResolvedValueOnce([mockWorkflow]), // Returning an array
+        });
+        
+
+        await createApprovalWorkflow(mockRequest, mockResponse);
+
+        expect(mockResponse.status).toHaveBeenCalledWith(200);
+        expect(mockResponse.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                success: true,
+                message: "Approval workflow created/updated successfully."
+            })
+        );
+    });
+
     test("deleteApprovalWorkflow should delete a workflow by ID", async () => {
         ApprovalWorkflow.findById.mockResolvedValueOnce({ _id: "12345" });
         ApprovalWorkflow.findByIdAndDelete.mockResolvedValueOnce({});

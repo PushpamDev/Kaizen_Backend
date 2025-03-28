@@ -30,13 +30,14 @@ const createKaizenIdea = async (req, res) => {
             afterKaizenFiles = []
         } = req.body;
 
+        // Validate required fields first
+        if (!suggesterName || !employeeCode || !category || !plantCode || !registrationNumber) {
+            return res.status(400).json({ success: false, message: "Missing required fields." });
+        }
+
         // Convert registrationNumber to lowercase for case-insensitive uniqueness
         const normalizedRegNum = registrationNumber.trim().toLowerCase();
 
-        // Validate required fields
-        if (!suggesterName || !employeeCode || !category || !plantCode || !normalizedRegNum) {
-            return res.status(400).json({ success: false, message: "Missing required fields." });
-        }
 
         // Prevent duplicate entries
         const existingKaizen = await KaizenIdea.findOne({ registrationNumber: normalizedRegNum });

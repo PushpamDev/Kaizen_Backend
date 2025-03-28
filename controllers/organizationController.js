@@ -1,7 +1,7 @@
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const Organization = require("../models/OrganizationModel");
+const Organization = require("../models/OrganizationLogo");
 
 // Ensure the upload directory exists
 const uploadDir = path.join(__dirname, "../uploads/logos");
