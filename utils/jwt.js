@@ -5,7 +5,7 @@ const generateToken = (user) => {
         { 
             id: user._id.toString(), 
             role: user.role, 
-            plantCode: user.plantCode // ✅ Include plantCode in token
+            plantCode: user.plantCode //  Include plantCode in token
         }, 
         process.env.JWT_SECRET, 
         { expiresIn: "7d" }  // Token expires in 7 days

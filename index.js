@@ -76,7 +76,7 @@ const setupApp = async () => {
     app.use("/api/auth", authRoutes, authMiddleware); 
     app.use("/api/upload", uploadRoutes);
     app.use("/api/employees", employeeRoutes);
-    app.use("/api/status", authMiddleware, employeeVerificationRoutes);
+    app.use("/api/status", employeeVerificationRoutes);
     app.use("/api/approval-workflow", authMiddleware, approvalWorkflowRoutes);
     app.use("/api/organization", authMiddleware, organizationRoutes);
 
