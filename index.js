@@ -69,7 +69,7 @@ const setupApp = async () => {
     const employeeVerificationRoutes = require("./routes/employeeVerificationRoutes");
     const approvalWorkflowRoutes = require("./routes/ApprovalWorkflowRoutes");
     const organizationRoutes = require("./routes/organizationRoutes");
-
+    const fileSettingsRoutes = require("./routes/fileSettingsRoutes");
     // Mount API Routes with authMiddleware where needed
     app.use("/api/kaizen",kaizenRoutes);
     app.use("/api/categories",categoryRoutes);
@@ -79,7 +79,10 @@ const setupApp = async () => {
     app.use("/api/status", employeeVerificationRoutes);
     app.use("/api/approval-workflow", authMiddleware, approvalWorkflowRoutes);
     app.use("/api/organization", authMiddleware, organizationRoutes);
+    app.use("/api/file-settings", fileSettingsRoutes);
 
+
+    
     // Global Error Handler
     app.use((err, req, res, next) => {
         console.error("🔥 Server Error:", err.message);
