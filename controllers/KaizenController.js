@@ -164,18 +164,27 @@ const createKaizenIdea = async (req, res) => {
 };
 
 
-//Fetch all Kaizen Ideas
+// Fetch all Kaizen Ideas
 const getAllKaizenIdeas = async (req, res) => {
     try {
         const { status, category, startDate, endDate, sortBy = "createdAt" } = req.query;
 
         // Initialize filters based on user role
-        let filter = req.user.role === "super admin" ? {} : { plantCode: req.user.plantCode };
-        console.log("🔍 Applying filters:", JSON.stringify(filter, null, 2));
-
-        // If not super admin, restrict to Kaizen ideas where user is a current approver
-        if (req.user.role !== "super admin") {
+        let filter = {};
+        
+        if (req.user.role === "admin") {
+            // Super admin sees all Kaizen ideas for their plant
+            if (!req.user.plantCode) {
+                console.warn("⚠️ admin has no plantCode assigned");
+                return res.status(400).json({ success: false, message: "Super admin must be associated with a plant" });
+            }
+            filter.plantCode = req.user.plantCode;
+            console.log("🔍 admin filter applied:", JSON.stringify(filter, null, 2));
+        } else {
+            // Non-super admin users see only ideas where they are current approvers
+            filter.plantCode = req.user.plantCode;
             filter.currentApprovers = req.user.email;
+            console.log("🔍 Non-admin filter applied:", JSON.stringify(filter, null, 2));
         }
 
         // Apply additional filters if provided
@@ -248,18 +257,33 @@ const getKaizenIdeaByRegistrationNumber = async (req, res) => {
             return res.status(400).json({ success: false, message: "Registration number cannot be empty." });
         }
 
-        const filter = req.user.role === "super admin" ? {} : { plantCode: req.user.plantCode };
-        console.log("🔍 Searching for:", normalizedRegNum, "with filter:", filter);
+        // Initialize filter based on user role
+        let filter = {};
+        
+        if (req.user.role === "admin") {
+            // Super admin sees Kaizen ideas only for their plant
+            if (!req.user.plantCode) {
+                console.warn("⚠️ Super admin has no plantCode assigned");
+                return res.status(400).json({ success: false, message: "Super admin must be associated with a plant" });
+            }
+            filter.plantCode = req.user.plantCode;
+            console.log("🔍 admin filter applied:", JSON.stringify(filter, null, 2));
+        } else {
+            // Non-super admin users see only ideas where they are current approvers
+            filter.plantCode = req.user.plantCode;
+            console.log("🔍 Non-admin filter applied:", JSON.stringify(filter, null, 2));
+        }
 
+        // Search for the Kaizen idea
         const idea = await KaizenIdea.findOne({ registrationNumber: normalizedRegNum, ...filter }).lean();
         if (!idea) {
             console.warn("⚠️ Kaizen idea not found for:", normalizedRegNum);
             return res.status(404).json({ success: false, message: "Kaizen idea not found" });
         }
 
-        // Check if user is authorized to view this Kaizen
+        // Check authorization for non-super admins
         const userEmail = req.user.email; // Assuming req.user.email is set by your auth middleware
-        if (req.user.role !== "super admin" && !idea.currentApprovers.includes(userEmail)) {
+        if (req.user.role !== "admin" && !idea.currentApprovers.includes(userEmail)) {
             console.warn("⚠️ Unauthorized access attempt by:", userEmail);
             return res.status(403).json({ 
                 success: false, 
@@ -277,7 +301,6 @@ const getKaizenIdeaByRegistrationNumber = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
-
 //Update a Kaizen Idea
 const updateKaizenIdea = async (req, res) => {
     try {
