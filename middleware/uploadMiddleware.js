@@ -1,7 +1,6 @@
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const { getUploadSettings } = require("../utils/fileUploadSetting");
 require("dotenv").config();
 
 // Ensure the "uploads" directory exists
@@ -18,8 +17,6 @@ const defaultAllowedTypes = ["image/jpeg", "image/png", "application/pdf"];
 
 // Dynamic Multer configuration
 const configureMulter = () => {
-    const { maxFileSize, maxFileCount } = getUploadSettings();
-
     const storage = multer.diskStorage({
         destination: (req, file, cb) => {
             console.log(`📂 Storing file: ${file.originalname} in ${uploadDir}`);
@@ -48,10 +45,9 @@ const configureMulter = () => {
     return multer({
         storage,
         fileFilter,
-        limits: { fileSize: maxFileSize },
     }).fields([
-        { name: "beforeKaizenFiles", maxCount },
-        { name: "afterKaizenFiles", maxCount },
+        { name: "beforeKaizenFiles" },
+        { name: "afterKaizenFiles" },
     ]);
 };
 
@@ -65,9 +61,6 @@ const uploadKaizenFiles = (req, res, next) => {
     upload(req, res, (err) => {
         if (err instanceof multer.MulterError) {
             console.error("❌ Multer Error:", err);
-            if (err.code === "LIMIT_FILE_SIZE") {
-                return res.status(400).json({ success: false, message: `File too large. Max size is ${getUploadSettings().maxFileSize / 1024 / 1024}MB.` });
-            }
             return res.status(400).json({ success: false, message: err.message });
         } else if (err) {
             console.error("❌ Upload Error:", err);

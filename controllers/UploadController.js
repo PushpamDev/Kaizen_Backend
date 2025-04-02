@@ -23,7 +23,6 @@ const storage = multer.diskStorage({
     }
 });
 
-
 // File Filter for Validation
 const fileFilter = (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -33,23 +32,19 @@ const fileFilter = (req, file, cb) => {
     cb(null, true);
 };
 
-// Multer Middleware (Limit file size to 5MB, max 10 files per field)
+// Multer Middleware (No size limits or max count)
 const upload = multer({
     storage: storage,
-    fileFilter: fileFilter,
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+    fileFilter: fileFilter
 }).fields([
-    { name: "beforeKaizenFiles", maxCount: 10 },
-    { name: "afterKaizenFiles", maxCount: 10 }
+    { name: "beforeKaizenFiles" },
+    { name: "afterKaizenFiles" }
 ]);
 
 // Upload File Controller
 const uploadFiles = (req, res) => {
     upload(req, res, function (err) {
         if (err instanceof multer.MulterError) {
-            if (err.code === "LIMIT_FILE_SIZE") {
-                return res.status(400).json({ success: false, message: "File too large. Max size is 5MB." });
-            }
             return res.status(400).json({ success: false, message: `Multer error: ${err.message}` });
         } else if (err) {
             return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });

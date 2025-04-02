@@ -1,6 +1,5 @@
 const express = require("express");
 const { uploadKaizenFiles, mapFilesToFields } = require("../middleware/uploadMiddleware");
-const { updateUploadSettings } = require("../controllers/fileUploadSettingController");
 const router = express.Router();
 
 router.post("/", uploadKaizenFiles, (req, res) => {
@@ -51,6 +50,5 @@ router.post("/", uploadKaizenFiles, (req, res) => {
     }
 });
 
-router.post("/upload-settings", updateUploadSettings);
 
 module.exports = router;
