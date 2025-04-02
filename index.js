@@ -59,7 +59,6 @@ const setupApp = async () => {
     app.use(cors());
     app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-
     // Import API Routes
     const kaizenRoutes = require("./routes/kaizenRoutes");
     const categoryRoutes = require("./routes/categoryRoutes");
@@ -70,9 +69,11 @@ const setupApp = async () => {
     const approvalWorkflowRoutes = require("./routes/ApprovalWorkflowRoutes");
     const organizationRoutes = require("./routes/organizationRoutes");
     const fileSettingsRoutes = require("./routes/fileSettingsRoutes");
+    const qrCodeRoutes = require("./routes/qrCodeRoutes");
+
     // Mount API Routes with authMiddleware where needed
-    app.use("/api/kaizen",kaizenRoutes);
-    app.use("/api/categories",categoryRoutes);
+    app.use("/api/kaizen", kaizenRoutes);
+    app.use("/api/categories", categoryRoutes);
     app.use("/api/auth", authRoutes, authMiddleware); 
     app.use("/api/upload", uploadRoutes);
     app.use("/api/employees", employeeRoutes);
@@ -80,9 +81,8 @@ const setupApp = async () => {
     app.use("/api/approval-workflow", authMiddleware, approvalWorkflowRoutes);
     app.use("/api/organization", authMiddleware, organizationRoutes);
     app.use("/api/file-settings", fileSettingsRoutes);
+    app.use("/api", qrCodeRoutes);
 
-
-    
     // Global Error Handler
     app.use((err, req, res, next) => {
         console.error("🔥 Server Error:", err.message);
