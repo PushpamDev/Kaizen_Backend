@@ -34,7 +34,7 @@ const plantConfigs = {
     "1054": { "apiUrl": "http://fr.thirdeye-ai.com/face/getEmpInfo", "frGroupName": "NMPL SSC CHK" }
 };
 
-// Define the route to return a QR code as a buffer
+// Generate QR code with frontend URL
 router.get("/get-plant-qr", async (req, res) => {
     try {
         const { plantCode } = req.query;
@@ -44,7 +44,9 @@ router.get("/get-plant-qr", async (req, res) => {
                 message: "Invalid or missing plantCode. Please provide a valid plantCode."
             });
         }
-        const qrData = plantCode;
+
+        // URL pointing to frontend on port 3000
+        const qrData = `http://localhost:3000/kaizen-idea-sheet/${plantCode}`;
 
         // Generate QR code as a buffer
         const qrCodeBuffer = await QRCode.toBuffer(qrData, {
@@ -54,11 +56,9 @@ router.get("/get-plant-qr", async (req, res) => {
 
         console.log(`✅ QR code buffer generated for plantCode: ${plantCode}`);
 
-        // Set the response headers for an image
+        // Send the QR code image
         res.setHeader("Content-Type", "image/png");
         res.setHeader("Content-Disposition", `inline; filename="qr-${plantCode}.png"`);
-
-        // Send the buffer directly as the response
         res.send(qrCodeBuffer);
     } catch (error) {
         console.error("❌ Error generating QR code:", error.message);
