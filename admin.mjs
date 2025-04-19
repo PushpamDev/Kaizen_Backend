@@ -1,4 +1,4 @@
-import AdminJS, { ComponentLoader } from "adminjs"; // ✅ Import ComponentLoader
+import AdminJS, { ComponentLoader } from "adminjs"; // Import ComponentLoader
 import AdminJSExpress from "@adminjs/express";
 import * as AdminJSMongoose from "@adminjs/mongoose"; 
 import express from "express";
@@ -11,14 +11,14 @@ import { User, rolePermissions } from "./models/UserModel.js";
 import KaizenIdea from "./models/KaizenIdea.js";
 import ApprovalWorkflow from "./models/ApprovalWorkflow.js";
 import Category from "./models/CategoryModel.js";
-import OrganizationLogo from "./models/OrganizationLogo.js"; // ✅ Import OrganizationLogo Model
+import OrganizationLogo from "./models/OrganizationLogo.js"; // Import OrganizationLogo Model
 
 dotenv.config();
 
-// ✅ Register Mongoose Adapter Before Importing Models
+// Register Mongoose Adapter Before Importing Models
 AdminJS.registerAdapter(AdminJSMongoose);
 
-// ✅ Set up Component Loader
+// Set up Component Loader
 const componentLoader = new ComponentLoader();
 const OrganizationLogoShow = componentLoader.add("OrganizationLogoShow", "./admin/components/OrganizationLogoShow");
 
@@ -31,7 +31,7 @@ const adminJs = new AdminJS({
                 properties: {
                     logo: {
                         components: {
-                            show: OrganizationLogoShow, // ✅ Register the custom component
+                            show: OrganizationLogoShow, // Register the custom component
                         },
                     },
                 },
@@ -60,10 +60,10 @@ const adminJs = new AdminJS({
             },
         },
     ],
-    componentLoader, // ✅ Attach component loader to AdminJS
+    componentLoader, //  Attach component loader to AdminJS
 });
 
-// ✅ Fix Session Persistence with Mongo Store
+// Fix Session Persistence with Mongo Store
 const sessionStore = connectMongo.create({
     mongoUrl: process.env.MONGO_URI,
     collectionName: "sessions",
@@ -77,7 +77,7 @@ const sessionOptions = {
     cookie: { secure: process.env.NODE_ENV === "production" },
 };
 
-// ✅ Secure Authentication
+//  Secure Authentication
 const authenticate = async (email, password) => {
     const user = await User.findOne({ email });
 
@@ -89,7 +89,7 @@ const authenticate = async (email, password) => {
     return user;
 };
 
-// ✅ Create Admin Router
+//  Create Admin Router
 const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
     adminJs,
     {
